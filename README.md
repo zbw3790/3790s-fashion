@@ -1,27 +1,28 @@
 # 3790's Vanilla Style Fashion
 
-适用于 Minecraft Java Edition 26.2 + Fabric 的服务器权威披风时装 Mod，保持原版视觉与交互风格。
+为 Minecraft Java Edition 26.2 服务器提供披风衣柜：服主准备披风，玩家在游戏内预览并选择，外观仍使用 Minecraft 原版模型与动作。
 
 ![项目 Logo](branding/logo-128.png)
 
-## 支持环境
+## 安装需求
 
 - 版本：`0.1.0`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
-- 构建 JDK：`25`
+- Java：游戏按 Minecraft 26.2 的正常要求运行；从源码构建需要 JDK 25
 
-完整功能需要客户端与服务器同时安装本 Mod 和 Fabric API。未安装本 Mod 的原版客户端仍可加入安装了本 Mod 的服务器；安装了本 Mod 的客户端也可以连接原版服务器，详见[兼容性说明](docs/compatibility.md)。
+完整功能需要客户端和服务器都安装 Fabric Loader、Fabric API 与本 Mod。没有安装本 Mod 的原版客户端仍能进入服务器，只是不能使用衣柜或显示本 Mod 的披风。
 
-## 基本功能
+## 这个 Mod 能做什么
 
-- 服务器本地管理 Cape Cosmetic 资产和玩家选择。
-- 空手右键完全空的原版盔甲架打开原版风格衣柜。
-- 衣柜提供披风网格、玩家模型预览以及服务器确认后的正式选择。
-- 支持披风与 Elytra 的原版模型、姿态和动画。
+- 把完全空置的原版盔甲架当作衣柜入口，不添加新方块或物品。
+- 在衣柜中浏览服务器提供的披风，并直接在玩家模型上预览。
+- 玩家点击“完成”后由服务器保存选择，并同步给其他在线玩家。
+- 支持普通披风、独立 Elytra 纹理以及 Cape/Elytra 共用一张纹理。
+- 资产暂时损坏时安全回退为原版外观，修复后可以恢复。
 
-## 资产与模板
+## 服主：添加披风
 
 服务器资产放置在：
 
@@ -29,7 +30,7 @@
 config/vanilla-fashion/capes/<id>/
 ```
 
-支持三种 64×32 PNG 布局：
+每个 `<id>` 目录代表一个可选择的披风。放入以下三种 64×32 PNG 布局之一：
 
 | 布局 | 文件 |
 | --- | --- |
@@ -37,16 +38,20 @@ config/vanilla-fashion/capes/<id>/
 | 分离披风与 Elytra | `cape.png` + `elytra.png` |
 | 共享单文件 | `cape_elytra.png` |
 
-可从 [`templates/capes/`](templates/capes/) 复制正式示例。完整命名、校验和回退规则见 [Cape Cosmetic 资产布局](docs/cape-cosmetic-asset-layout.md)。修改资产后需要重启服务器。
+可从 [`templates/capes/`](templates/capes/) 复制示例目录，再修改图案和目录名。完整命名、校验及回退规则见 [Cape Cosmetic 资产布局](docs/cape-cosmetic-asset-layout.md)。添加或修改资产后需要重启服务器。
 
-## 安装与使用
+## 玩家：使用衣柜
 
-1. 在客户端和服务器安装 Minecraft 26.2、Fabric Loader、Fabric API 与本 Mod。
-2. 把 Cape Cosmetic 目录放入服务器的 `config/vanilla-fashion/capes/`。
-3. 启动服务器；玩家主手为空时，右键六个装备槽和手持槽均为空的原版盔甲架。
-4. 在衣柜中预览条目并点击“完成”，由服务器批准并保存选择。
+1. 找到一个头部、身体、腿、脚、主手和副手都没有物品的原版盔甲架。
+2. 保持玩家主手为空，使用主手右键盔甲架。
+3. 在衣柜里点击“原版”或一个披风条目进行预览。
+4. 点击“完成”提交选择；点击“取消”或按 ESC 会放弃尚未提交的预览。
 
-## 构建
+“原版”表示不使用服务器披风，继续由 Minecraft 决定玩家原有的 Cape/Elytra 外观。旁观者模式不会打开衣柜。
+
+详细的双向兼容行为见[兼容性说明](docs/compatibility.md)。
+
+## 开发者构建
 
 Windows PowerShell：
 
