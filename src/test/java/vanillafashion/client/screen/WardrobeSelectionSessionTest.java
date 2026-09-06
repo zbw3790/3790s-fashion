@@ -348,11 +348,11 @@ class WardrobeSelectionSessionTest {
 	}
 
 	@ParameterizedTest @ValueSource(ints = {320, 427, 854})
-	void twoVanillaButtonsRemainSeparateInsideSupportedLayout(int width) {
+	void singleApplyStaysSeparateFromBottomStatus(int width) {
 		var layout = WardrobeLayout.calculate(width, 240, 9);
 		assertTrue(layout.finishButtonBounds().isWithin(width, 240));
-		assertTrue(layout.cancelButtonBounds().isWithin(width, 240));
-		assertFalse(layout.finishButtonBounds().overlaps(layout.cancelButtonBounds()));
-		assertTrue(layout.finishButtonBounds().y() >= layout.statusLabelY() + 9);
+		assertEquals(56, layout.applyButtonBounds().width());
+		assertFalse(layout.applyButtonBounds().overlaps(layout.statusBounds()));
+		assertEquals(20, layout.applyButtonBounds().height());
 	}
 }

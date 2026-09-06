@@ -71,7 +71,7 @@ class ReleaseArchitectureAuditTest {
 		Path project = root();
 		String properties = read(project.resolve("gradle.properties"));
 		String metadata = read(project.resolve("src/main/resources/fabric.mod.json"));
-		assertTrue(properties.contains("mod_version=0.1.0"));
+		assertTrue(properties.contains("mod_version=0.2.0"));
 		assertTrue(metadata.contains("vanilla_fashion"));
 		assertTrue(metadata.contains("3790's Vanilla Style Fashion"));
 		assertTrue(metadata.contains("MIT"));

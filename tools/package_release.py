@@ -1,4 +1,4 @@
-"""生成并审计 Vanilla Fashion v0.1.0 的确定性完整发布包。"""
+"""根据项目权威版本生成并审计 Vanilla Fashion 的确定性完整发布包。"""
 
 from __future__ import annotations
 
@@ -6,14 +6,32 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import shutil
 import subprocess
 import zipfile
 from pathlib import Path, PurePosixPath
 
 
+def read_project_version(properties_path: Path) -> str:
+    versions = []
+    for line in properties_path.read_text(encoding="utf-8-sig").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "!")) or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip() == "mod_version":
+            versions.append(value.strip())
+    if len(versions) != 1:
+        raise ValueError("gradle.properties 必须包含唯一的 mod_version。")
+    version = versions[0]
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
+        raise ValueError("mod_version 必须是安全的版本标识，不能包含路径或空白。")
+    return version
+
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.0"
+VERSION = read_project_version(PROJECT_ROOT / "gradle.properties")
 PACKAGE_NAME = f"vanilla-fashion-{VERSION}"
 JAR_NAME = f"{PACKAGE_NAME}.jar"
 JAR_PATH = PROJECT_ROOT / "build/libs" / JAR_NAME
@@ -39,6 +57,13 @@ RECOGNIZED_FILES = {"cape.png", "elytra.png", "cape_elytra.png"}
 OS_JUNK = {".DS_Store", "Thumbs.db", "desktop.ini"}
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 FORBIDDEN_SEGMENTS = {
+    ".idea",
+    ".vscode",
+    "archive",
+    "docs",
+    "reference",
+    "runs",
+    "tests",
     ".git",
     ".gradle",
     "build",
@@ -52,6 +77,8 @@ FORBIDDEN_SEGMENTS = {
     "worlds",
 }
 FORBIDDEN_NAMES = {
+    "AGENTS.md",
+    "notify_task_complete.ps1",
     "build.gradle",
     "eula.txt",
     "gradlew",
@@ -70,17 +97,9 @@ def sha256(path: Path) -> str:
 
 
 def require_project_version() -> None:
-    properties = (PROJECT_ROOT / "gradle.properties").read_text(encoding="utf-8")
-    versions = {
-        key.strip(): value.strip()
-        for line in properties.splitlines()
-        if line and not line.startswith("#") and "=" in line
-        for key, value in (line.split("=", 1),)
-    }
-    if versions.get("mod_version") != VERSION:
-        raise ValueError(
-            f"打包版本与项目版本不一致：脚本={VERSION}，项目={versions.get('mod_version')}"
-        )
+    current = read_project_version(PROJECT_ROOT / "gradle.properties")
+    if current != VERSION:
+        raise ValueError(f"项目版本在打包期间发生变化：开始={VERSION}，当前={current}")
 
 
 def require_safe_generated_path(path: Path) -> None:
@@ -154,6 +173,7 @@ def validate_inputs() -> None:
         raise FileNotFoundError(
             f"正式 Validator class 不存在，请先执行 clean build：{MAIN_CLASSES}"
         )
+    audit_runtime_jar(JAR_PATH.read_bytes())
     for name, (layout, recognized_files) in TEMPLATES.items():
         validate_template(name, layout, recognized_files)
 
@@ -195,12 +215,11 @@ def prepare_package_directory() -> None:
 
     target_root = PACKAGE_DIRECTORY / "templates/capes"
     target_root.mkdir(parents=True)
-    for name in TEMPLATES:
-        shutil.copytree(
-            TEMPLATE_ROOT / name,
-            target_root / name,
-            copy_function=shutil.copyfile,
-        )
+    for name, (_, recognized_files) in TEMPLATES.items():
+        destination = target_root / name
+        destination.mkdir()
+        for file_name in recognized_files:
+            shutil.copyfile(TEMPLATE_ROOT / name / file_name, destination / file_name)
     write_checksums()
 
 
@@ -257,11 +276,31 @@ def audit_runtime_jar(jar_bytes: bytes) -> None:
             )
             or name.endswith(("Test.class", ".java", ".kt"))
         ]
+        for name in names:
+            path = PurePosixPath(name)
+            if path.is_absolute() or ".." in path.parts or "\\" in name:
+                forbidden.append(name)
+            elif any(part.lower() in FORBIDDEN_SEGMENTS for part in path.parts):
+                forbidden.append(name)
+            elif path.name.lower() in {value.lower() for value in FORBIDDEN_NAMES}:
+                forbidden.append(name)
+            elif path.suffix.lower() == ".png" and name != "assets/vanilla_fashion/icon.png":
+                forbidden.append(name)
         if forbidden:
-            raise ValueError(f"Runtime JAR 包含发布禁用内容：{forbidden}")
+            raise ValueError(f"Runtime JAR 包含发布禁用内容：{sorted(set(forbidden))}")
+        if len(names) != len(set(names)):
+            raise ValueError("Runtime JAR 包含重复条目。")
         metadata = json.loads(archive.read("fabric.mod.json"))
-        if metadata.get("version") != VERSION or metadata.get("environment") != "*":
-            raise ValueError("Runtime JAR 的版本或 environment 不符合 v0.1.0 冻结要求")
+        expected = {
+            "version": VERSION,
+            "name": "3790's Vanilla Style Fashion",
+            "id": "vanilla_fashion",
+            "license": "MIT",
+            "environment": "*",
+        }
+        for key, value in expected.items():
+            if metadata.get(key) != value:
+                raise ValueError(f"Runtime JAR metadata 不符：{key} 应为 {value}。")
 
 
 def expected_checksum_names() -> set[str]:
@@ -275,6 +314,8 @@ def audit_checksums(archive: zipfile.ZipFile, checksum_text: str) -> None:
         if separator != "  " or len(digest) != 64 or digest.lower() != digest:
             raise ValueError(f"SHA256SUMS.txt 格式不合法：{line}")
         int(digest, 16)
+        if relative in found:
+            raise ValueError(f"SHA256SUMS.txt 包含重复条目：{relative}")
         found[relative] = digest
     if set(found) != expected_checksum_names():
         raise ValueError(
@@ -297,6 +338,19 @@ def audit_release_zip(path: Path) -> None:
         expected_names = [archive_name for _, archive_name, _ in release_entries()]
         if names != expected_names:
             raise ValueError("ZIP 条目顺序或内容与发布目录不一致")
+        allowed_files = expected_checksum_names() | {"README.md", "LICENSE", "SHA256SUMS.txt"}
+        expected_files = {f"{PACKAGE_NAME}/{relative}" for relative in allowed_files}
+        actual_files = {info.filename for info in archive.infolist() if not info.is_dir()}
+        if actual_files != expected_files:
+            raise ValueError("ZIP 文件集合不符合发布白名单。")
+        expected_directories = {
+            parent.as_posix() + "/"
+            for name in expected_files
+            for parent in PurePosixPath(name).parents
+            if parent.parts
+        }
+        if set(names) != expected_files | expected_directories:
+            raise ValueError("ZIP 目录集合不符合发布白名单。")
         top_levels: set[str] = set()
         for name in names:
             if "\\" in name:
@@ -350,7 +404,7 @@ def report() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成并验证 v0.1.0 完整发布包。")
+    parser = argparse.ArgumentParser(description="根据 gradle.properties 版本生成并验证完整发布包。")
     parser.add_argument(
         "--verify",
         action="store_true",

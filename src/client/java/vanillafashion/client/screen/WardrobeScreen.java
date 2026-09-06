@@ -1,181 +1,150 @@
 package vanillafashion.client.screen;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import vanillafashion.cape.CapeCosmeticMetadata;
+import vanillafashion.client.render.WardrobePreviewAppearance;
 import vanillafashion.client.cape.ClientCapeRegistry;
+import vanillafashion.client.cape.ClientCapeTextureManager;
+import vanillafashion.client.cape.ClientCapeTextureResolver;
 import vanillafashion.client.fashion.ClientPlayerFashionRegistry;
 import vanillafashion.client.network.ClientCapeSelectionRequestTracker;
 import vanillafashion.network.SetCapeSelectionPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import vanillafashion.client.cape.ClientCapeTextureManager;
-import vanillafashion.client.cape.ClientCapeTextureResolver;
-import vanillafashion.client.render.WardrobePreviewAppearance;
 
+/** 承载唯一 Draft、玩家预览和应用入口；Cape 内容只管理网格与分页。 */
 public final class WardrobeScreen extends Screen {
 	private static final Component TITLE = Component.literal("衣柜");
-	private static final Component PLAYER_SECTION_TITLE = Component.literal("玩家");
-	private static final Component CAPE_SECTION_TITLE = Component.literal("披风");
-	private static final Component EMPTY_REGISTRY_MESSAGE = Component.literal("服务器暂无可用披风");
-	private static final Component PLAYER_UNAVAILABLE_MESSAGE = Component.literal("玩家预览不可用");
-	private static final Component FINISH_BUTTON = Component.literal("完成");
-	private static final Component CANCEL_BUTTON = Component.literal("取消");
-	private static final Component PREVIOUS_PAGE_BUTTON = Component.literal("<");
-	private static final Component NEXT_PAGE_BUTTON = Component.literal(">");
+	private static final Component CAPE_TAB = Component.literal("披风");
+	private static final Component APPLY = Component.literal("应用");
+	private static final String TOO_SMALL = "窗口过小，无法显示衣柜";
+	private static final String PREVIEW_UNAVAILABLE = "玩家预览不可用";
 	private static final float PLAYER_PREVIEW_OFFSET_Y = 0.0625F;
-	private static final int PREVIEW_BACKGROUND_COLOR = 0x80000000;
-	private static final int PREVIEW_OUTLINE_COLOR = 0xFF808080;
 
-	private final WardrobeCapeCatalog catalog;
-	private final ClientCapeTextureManager textureManager;
-	private WardrobePreviewAppearanceResolver previewAppearanceResolver;
-	private final ClientCapeRegistry capeRegistry;
 	private final ClientPlayerFashionRegistry playerFashions;
 	private final ClientCapeSelectionRequestTracker requests;
 	private final UUID self;
 	private final Object connection;
+	private final Actions actions;
 	private final WardrobeSelectionSession selection = new WardrobeSelectionSession();
-	private List<CapeCosmeticMetadata> metadataEntries;
-	private Button finishButton;
+	private final CapeWardrobeContent capeContent;
+	private final ClientCapeTextureResolver textureResolver;
 	private final WardrobePreviewRotation previewRotation = new WardrobePreviewRotation();
 	private final WardrobePlayerPreviewRenderer previewRenderer = new WardrobePlayerPreviewRenderer();
-	private final List<CapeGridEntryWidget> entryWidgets = new ArrayList<>();
+	private final SelectedTab selectedTab = SelectedTab.CAPE;
+	private WardrobePreviewAppearanceResolver previewAppearanceResolver;
+	private List<CapeCosmeticMetadata> previewMetadata;
 	private WardrobeLayout layout;
+	private Button applyButton;
 
-	public WardrobeScreen(
-			ClientCapeRegistry capeRegistry,
-			ClientCapeTextureManager textureManager,
-			ClientPlayerFashionRegistry playerFashions,
-			ClientCapeSelectionRequestTracker requests,
-			UUID self,
-			Object connection
-	) {
-		super(TITLE);
-		this.capeRegistry = Objects.requireNonNull(capeRegistry);
+	public WardrobeScreen(ClientCapeRegistry capeRegistry, ClientCapeTextureManager textureManager,
+			ClientPlayerFashionRegistry playerFashions, ClientCapeSelectionRequestTracker requests,
+			UUID self, Object connection) {
+		this(Minecraft.getInstance(), Minecraft.getInstance().font, capeRegistry, textureManager,
+				playerFashions, requests, self, connection, runtimeActions(Minecraft.getInstance()));
+	}
+
+	/** 将屏幕外部的输入绑定、发送和关闭动作集中在一个边界，便于普通 JVM 验证。 */
+	WardrobeScreen(Minecraft minecraft, Font font, ClientCapeRegistry capeRegistry,
+			ClientCapeTextureManager textureManager, ClientPlayerFashionRegistry playerFashions,
+			ClientCapeSelectionRequestTracker requests, UUID self, Object connection, Actions actions) {
+		super(minecraft, Objects.requireNonNull(font), TITLE);
 		this.playerFashions = Objects.requireNonNull(playerFashions);
 		this.requests = Objects.requireNonNull(requests);
 		this.self = Objects.requireNonNull(self);
 		this.connection = Objects.requireNonNull(connection);
-		metadataEntries = capeRegistry.entries();
-		catalog = new WardrobeCapeCatalog(metadataEntries);
-		previewAppearanceResolver = new WardrobePreviewAppearanceResolver(
-				metadataEntries,
-				new ClientCapeTextureResolver(textureManager)
-		);
-		this.textureManager = Objects.requireNonNull(textureManager, "衣柜运行时纹理管理器不能为 null。");
-		selection.observe(playerFashions.selfAuthority(self), playerFashions.state());
+		this.actions = Objects.requireNonNull(actions);
+		capeContent = new CapeWardrobeContent(capeRegistry, textureManager, selection);
+		textureResolver = new ClientCapeTextureResolver(textureManager);
+		previewMetadata = capeContent.metadataEntries();
+		previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
+		observeAuthority();
+	}
+
+	private static Actions runtimeActions(Minecraft minecraft) {
+		return new Actions(
+				() -> minecraft.getConnection() != null
+						&& ClientPlayNetworking.canSend(SetCapeSelectionPayload.TYPE),
+				event -> minecraft.options.keyInventory.matches(event),
+				ClientPlayNetworking::send,
+				() -> minecraft.gui.setScreen(null));
 	}
 
 	@Override
 	protected void init() {
-		entryWidgets.clear();
-		layout = WardrobeLayout.calculate(width, height, font.lineHeight);
-
-		List<WardrobeCapeCatalog.Entry> pageEntries = catalog.pageEntries();
-		for (int index = 0; index < pageEntries.size(); index++) {
-			WardrobeCapeCatalog.Entry entry = pageEntries.get(index);
-			WardrobeLayout.Bounds entryBounds = layout.entryBounds(index);
-			var widget = new CapeGridEntryWidget(
-					entryBounds.x(),
-					entryBounds.y(),
-					entryBounds.width(),
-					entryBounds.height(),
-					font,
-					entry,
-					textureLookup(entry),
-					() -> selection.authorityKnown() && entry.capeId().equals(selection.draft()),
-					() -> selection.select(entry.capeId())
-			);
-			entryWidgets.add(addRenderableWidget(widget));
+		layout = WardrobeLayout.calculate(Math.max(1, width), Math.max(1, height), font.lineHeight);
+		previewRotation.endDrag(WardrobePreviewRotation.PRIMARY_MOUSE_BUTTON);
+		applyButton = null;
+		capeContent.buildWidgets(layout, widget -> addRenderableWidget(widget), this::rebuildWidgets);
+		if (layout.fitsScreen()) {
+			addRenderableWidget(new CapeTabWidget(layout.tabBounds()));
+			var bounds = layout.applyButtonBounds();
+			applyButton = addRenderableWidget(Button.builder(APPLY, button -> applySelection())
+					.bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height()).build());
 		}
-
-		WardrobeLayout.Bounds previousPageBounds = layout.previousPageButtonBounds();
-		Button previousPageButton = addRenderableWidget(Button.builder(
-				PREVIOUS_PAGE_BUTTON,
-				button -> changePage(false)
-		).bounds(
-				previousPageBounds.x(),
-				previousPageBounds.y(),
-				previousPageBounds.width(),
-				previousPageBounds.height()
-		).build());
-		previousPageButton.active = catalog.canGoToPreviousPage();
-
-		WardrobeLayout.Bounds nextPageBounds = layout.nextPageButtonBounds();
-		Button nextPageButton = addRenderableWidget(Button.builder(
-				NEXT_PAGE_BUTTON,
-				button -> changePage(true)
-		).bounds(
-				nextPageBounds.x(),
-				nextPageBounds.y(),
-				nextPageBounds.width(),
-				nextPageBounds.height()
-		).build());
-		nextPageButton.active = catalog.canGoToNextPage();
-
-		var finishBounds = layout.finishButtonBounds();
-		finishButton = addRenderableWidget(Button.builder(FINISH_BUTTON, button -> finish())
-				.bounds(finishBounds.x(), finishBounds.y(), finishBounds.width(), finishBounds.height()).build());
-		WardrobeLayout.Bounds closeButtonBounds = layout.cancelButtonBounds();
-		addRenderableWidget(Button.builder(CANCEL_BUTTON, button -> onClose())
-				.bounds(
-						closeButtonBounds.x(),
-						closeButtonBounds.y(),
-						closeButtonBounds.width(),
-						closeButtonBounds.height()
-				)
-				.build());
 		refreshSelection();
+	}
+
+	@Override
+	protected void setInitialFocus() {
+		if (minecraft != null) {
+			super.setInitialFocus();
+		}
 	}
 
 	@Override
 	public void tick() {
 		super.tick();
-		var currentMetadata = capeRegistry.entries();
-		if (!metadataEntries.equals(currentMetadata)) {
-			metadataEntries = currentMetadata;
-			catalog.replace(metadataEntries);
-			previewAppearanceResolver = new WardrobePreviewAppearanceResolver(
-					metadataEntries, new ClientCapeTextureResolver(textureManager));
-			rebuildWidgets();
-		}
 		selection.tick();
 		refreshSelection();
 	}
 
-	public WardrobeSelectionSession selectionSession() { return selection; }
+	private void observeAuthority() {
+		selection.observe(playerFashions.selfAuthority(self), playerFashions.state());
+	}
 
 	private boolean canSendSelection() {
-		return requests.matchesConnection(connection) && minecraft != null && minecraft.getConnection() != null
-				&& ClientPlayNetworking.canSend(SetCapeSelectionPayload.TYPE);
+		return requests.matchesConnection(connection) && actions.channelSupported().getAsBoolean();
 	}
 
 	private void refreshSelection() {
-		selection.observe(playerFashions.selfAuthority(self), playerFashions.state());
-		if (finishButton != null) {
-			finishButton.active = selection.canFinish(canSendSelection(), requests.hasOutstanding(),
-					id -> capeRegistry.find(id).isPresent());
+		observeAuthority();
+		boolean changed = capeContent.refresh(
+				playerFashions.state() == ClientPlayerFashionRegistry.State.UNAVAILABLE);
+		// 分页或 resize 可能先刷新内容；预览独立核对自己的元数据快照。
+		if (!previewMetadata.equals(capeContent.metadataEntries())) {
+			previewMetadata = capeContent.metadataEntries();
+			previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
 		}
-		entryWidgets.forEach(widget -> {
-			widget.refreshAvailability();
-			widget.active &= selection.canEdit();
-		});
+		if (changed && layout != null) {
+			rebuildWidgets();
+		}
+		if (applyButton != null) {
+			applyButton.active = selection.canFinish(canSendSelection(), requests.hasOutstanding(),
+					capeContent::hasMetadata);
+		}
 	}
 
-	private void finish() {
+	void applySelection() {
 		refreshSelection();
-		var decision = selection.finish(requests, canSendSelection(), id -> capeRegistry.find(id).isPresent());
-		decision.request().ifPresent(ClientPlayNetworking::send);
+		var decision = selection.finish(requests, canSendSelection(), capeContent::hasMetadata);
+		decision.request().ifPresent(actions.send());
 		if (decision.close()) {
 			onClose();
 		} else {
@@ -184,9 +153,19 @@ public final class WardrobeScreen extends Screen {
 	}
 
 	@Override
+	public boolean keyPressed(KeyEvent event) {
+		// 优先关闭，防止 Inventory 被重绑定到 Enter/Space 时误触应用。
+		if (event.isEscape() || actions.inventoryKey().test(event)) {
+			onClose();
+			return true;
+		}
+		return super.keyPressed(event);
+	}
+
+	@Override
 	public void onClose() {
 		selection.cancel();
-		super.onClose();
+		actions.close().run();
 	}
 
 	@Override
@@ -195,102 +174,121 @@ public final class WardrobeScreen extends Screen {
 		super.removed();
 	}
 
-	private Component selectionLabel() {
-		return Component.literal(selection.selectionLabel());
+	public WardrobeSelectionSession selectionSession() {
+		return selection;
 	}
 
-	private Component statusLabel() {
-		return Component.literal(selection.status(canSendSelection(), requests.hasOutstanding(),
-				id -> capeRegistry.find(id).isPresent()));
+	WardrobeLayout layout() {
+		return layout;
 	}
 
-	@Override
-	public void extractRenderState(
-			GuiGraphicsExtractor graphics,
-			int mouseX,
-			int mouseY,
-			float partialTick
-	) {
-		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-		graphics.centeredText(font, title, width / 2, layout.titleY(), 0xFFFFFFFF);
-		graphics.centeredText(
-				font,
-				PLAYER_SECTION_TITLE,
-				layout.previewBounds().centerX(),
-				layout.sectionTitleY(),
-				0xFFFFFFFF
-		);
-		graphics.centeredText(
-				font,
-				CAPE_SECTION_TITLE,
-				layout.gridBounds().centerX(),
-				layout.sectionTitleY(),
-				0xFFFFFFFF
-		);
-		graphics.centeredText(
-				font,
-				statusLabel(),
-				layout.contentBounds().centerX(),
-				layout.statusLabelY(),
-				0xFFA0A0A0
-		);
-		graphics.centeredText(
-				font,
-				catalog.pageNumber() + " / " + catalog.pageCount(),
-				layout.gridBounds().centerX(),
-				layout.pageLabelY(),
-				0xFFFFFFFF
-		);
-		graphics.centeredText(
-				font,
-				selectionLabel(),
-				layout.contentBounds().centerX(),
-				layout.selectionLabelY(),
-				0xFFFFFFFF
-		);
+	CapeWardrobeContent capeContent() {
+		return capeContent;
+	}
 
-		if (catalog.capeCount() == 0) {
-			graphics.centeredText(
-					font,
-					EMPTY_REGISTRY_MESSAGE,
-					layout.gridBounds().centerX(),
-					layout.gridBounds().centerY() - font.lineHeight / 2,
-					0xFFA0A0A0
-			);
-		}
+	WardrobePreviewRotation previewRotation() {
+		return previewRotation;
+	}
+
+	SelectedTab selectedTab() {
+		return selectedTab;
+	}
+
+	WardrobeStatusText statusText() {
+		return WardrobeStatusText.create(selection, playerFashions.state(), canSendSelection(),
+				requests.hasOutstanding(), capeContent::hasMetadata, capeContent.state(), capeContent.status());
 	}
 
 	@Override
-	public void extractBackground(
-			GuiGraphicsExtractor graphics,
-			int mouseX,
-			int mouseY,
-			float partialTick
-	) {
+	public Component getNarrationMessage() {
+		return Component.literal("衣柜，披风。" + statusText().narration());
+	}
+
+	@Override
+	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		super.extractBackground(graphics, mouseX, mouseY, partialTick);
+		if (layout == null || !layout.fitsScreen()) {
+			return;
+		}
+		// Frame 与 selected seam 由同一几何入口计算并绘制。
+		WardrobeGuiPainter.frameWithSelectedCapeTab(graphics::fill, layout);
+		WardrobeGuiPainter.capeIcon(graphics::fill, layout.tabIconBounds());
+		for (int index = 0; index < WardrobeCapeCatalog.PAGE_SIZE; index++) {
+			WardrobeGuiPainter.slot(graphics::fill, layout.entryBounds(index));
+		}
 		extractPlayerPreview(graphics, mouseY);
 	}
 
 	@Override
+	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+		if (layout == null || !layout.fitsScreen()) {
+			String message = WardrobeStatusText.fit(TOO_SMALL, Math.max(1, width - 16), font::width);
+			graphics.text(font, message, Math.max(0, (width - font.width(message)) / 2),
+					Math.max(0, (height - font.lineHeight) / 2), WardrobeGuiPainter.TEXT_COLOR, false);
+			return;
+		}
+		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+		graphics.text(font, title, layout.titleX(), layout.titleY(), WardrobeGuiPainter.TEXT_COLOR, false);
+		if (capeContent.paginationVisible()) {
+			String page = capeContent.pageNumber() + " / " + capeContent.pageCount();
+			graphics.text(font, page, layout.paginationBounds().centerX() - font.width(page) / 2,
+					layout.pageLabelY(), WardrobeGuiPainter.TEXT_COLOR, false);
+		}
+		var bounds = layout.statusBounds();
+		var status = statusText();
+		var display = status.clip(bounds.width(), font::width);
+		graphics.enableScissor(bounds.x(), bounds.y(), bounds.right(), bounds.bottom());
+		graphics.text(font, display.firstLine(), bounds.x(), bounds.y(), WardrobeGuiPainter.TEXT_COLOR, false);
+		graphics.text(font, display.secondLine(), bounds.x(), bounds.y() + 10, WardrobeGuiPainter.TEXT_COLOR, false);
+		graphics.disableScissor();
+		if (bounds.contains(mouseX, mouseY)) {
+			List<Component> lines = status.fullText().stream().map(Component::literal)
+					.map(component -> (Component) component).toList();
+			graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
+		}
+	}
+
+	WardrobePreviewAppearance previewAppearance() {
+		return previewAppearanceResolver.resolve(selection.previewSelection());
+	}
+
+	private void extractPlayerPreview(GuiGraphicsExtractor graphics, int mouseY) {
+		var bounds = layout.previewBounds();
+		if (minecraft == null || minecraft.player == null) {
+			extractPreviewMessage(graphics, bounds, PREVIEW_UNAVAILABLE);
+			return;
+		}
+		if (!selection.authorityKnown()) {
+			extractPreviewMessage(graphics, bounds, "时装状态正在同步");
+			return;
+		}
+		var appearance = previewAppearance();
+		if (!previewRenderer.extract(graphics, bounds, layout.previewEntitySize(),
+				PLAYER_PREVIEW_OFFSET_Y, mouseY, previewRotation.yawDegrees(), minecraft.player, appearance)) {
+			extractPreviewMessage(graphics, bounds, PREVIEW_UNAVAILABLE);
+		}
+	}
+
+	private void extractPreviewMessage(GuiGraphicsExtractor graphics, WardrobeLayout.Bounds bounds, String message) {
+		String fitted = WardrobeStatusText.fit(message, bounds.width(), font::width);
+		graphics.text(font, fitted, bounds.centerX() - font.width(fitted) / 2,
+				bounds.centerY() - font.lineHeight / 2, WardrobeGuiPainter.TEXT_COLOR, false);
+	}
+
+	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (layout != null && previewRotation.beginDrag(
-				event.x(),
-				event.y(),
-				event.button(),
-				layout.previewBounds()
-		)) {
+		if (layout != null && layout.fitsScreen() && previewRotation.beginDrag(
+				event.x(), event.y(), event.button(), layout.previewBounds())) {
 			return true;
 		}
-
 		return super.mouseClicked(event, doubleClick);
 	}
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
-		if (previewRotation.drag(event.button(), deltaX)) {
+		if (layout != null && layout.fitsScreen() && previewRotation.drag(event.button(), deltaX)) {
 			return true;
 		}
-
 		return super.mouseDragged(event, deltaX, deltaY);
 	}
 
@@ -299,7 +297,6 @@ public final class WardrobeScreen extends Screen {
 		if (previewRotation.endDrag(event.button())) {
 			return true;
 		}
-
 		return super.mouseReleased(event);
 	}
 
@@ -308,73 +305,33 @@ public final class WardrobeScreen extends Screen {
 		return false;
 	}
 
-	private void changePage(boolean next) {
-		if (next) {
-			catalog.goToNextPage();
-		} else {
-			catalog.goToPreviousPage();
-		}
-		rebuildWidgets();
-	}
+	enum SelectedTab { CAPE }
 
-	private Supplier<Optional<Identifier>> textureLookup(WardrobeCapeCatalog.Entry entry) {
-		return entry.metadata()
-				.<Supplier<Optional<Identifier>>>map(metadata -> () -> textureManager.find(metadata.capeSha256()))
-				.orElse(Optional::empty);
-	}
-
-	private void extractPlayerPreview(GuiGraphicsExtractor graphics, int mouseY) {
-		WardrobeLayout.Bounds previewBounds = layout.previewBounds();
-		graphics.fill(
-				previewBounds.x(),
-				previewBounds.y(),
-				previewBounds.right(),
-				previewBounds.bottom(),
-				PREVIEW_BACKGROUND_COLOR
-		);
-		graphics.outline(
-				previewBounds.x(),
-				previewBounds.y(),
-				previewBounds.width(),
-				previewBounds.height(),
-				PREVIEW_OUTLINE_COLOR
-		);
-
-		if (minecraft == null || minecraft.player == null) {
-			extractPlayerUnavailable(graphics, previewBounds);
-			return;
-		}
-
-		if (!selection.authorityKnown()) {
-			graphics.centeredText(font, Component.literal("时装状态正在同步"),
-					previewBounds.centerX(), previewBounds.centerY(), 0xFFA0A0A0);
-			return;
-		}
-		WardrobePreviewAppearance appearance = previewAppearanceResolver.resolve(selection.previewSelection());
-		if (!previewRenderer.extract(
-				graphics,
-				previewBounds,
-				layout.previewEntitySize(),
-				PLAYER_PREVIEW_OFFSET_Y,
-				mouseY,
-				previewRotation.yawDegrees(),
-				minecraft.player,
-				appearance
-		)) {
-			extractPlayerUnavailable(graphics, previewBounds);
+	record Actions(BooleanSupplier channelSupported, Predicate<KeyEvent> inventoryKey,
+			Consumer<SetCapeSelectionPayload> send, Runnable close) {
+		Actions {
+			Objects.requireNonNull(channelSupported);
+			Objects.requireNonNull(inventoryKey);
+			Objects.requireNonNull(send);
+			Objects.requireNonNull(close);
 		}
 	}
 
-	private void extractPlayerUnavailable(
-			GuiGraphicsExtractor graphics,
-			WardrobeLayout.Bounds previewBounds
-	) {
-		graphics.centeredText(
-				font,
-				PLAYER_UNAVAILABLE_MESSAGE,
-				previewBounds.centerX(),
-				previewBounds.centerY() - font.lineHeight / 2,
-				0xFFA0A0A0
-		);
+	/** 唯一已选类别仍使用 Vanilla 的焦点、Tooltip 和旁白生命周期。 */
+	private static final class CapeTabWidget extends AbstractWidget {
+		CapeTabWidget(WardrobeLayout.Bounds bounds) {
+			super(bounds.x(), bounds.y(), bounds.width(), bounds.height(), CAPE_TAB);
+			setTooltip(Tooltip.create(CAPE_TAB));
+		}
+
+		@Override
+		protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+			// 像素几何已与主框一并绘制；没有第二套接缝或按钮底图。
+		}
+
+		@Override
+		protected void updateWidgetNarration(NarrationElementOutput output) {
+			output.add(NarratedElementType.TITLE, "披风，已选择");
+		}
 	}
 }
