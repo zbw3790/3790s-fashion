@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "vanilla_fashion",
+	"version": "${version}",
+	"name": "3790's Vanilla Style Fashion",
+	"description": "保持原版视觉与行为风格的服务器权威时装模组。",
+	"license": "MIT",
+	"icon": "assets/vanilla_fashion/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"vanillafashion.VanillaFashion"
+		],
+		"client": [
+			"vanillafashion.client.VanillaFashionClient"
+		]
+	},
+	"mixins": [
+		{
+			"config": "vanilla_fashion.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "26.2",
+		"java": ">=25",
+		"fabric-api": ">=0.158.0"
+	}
+}

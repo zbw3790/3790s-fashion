@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "vanillafashion.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"WingsLayerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

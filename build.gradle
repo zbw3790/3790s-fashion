@@ -1,0 +1,61 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"vanilla_fashion" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	testImplementation platform('org.junit:junit-bom:' + project.junit_version)
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	// 在普通测试 JVM 中应用 Fabric 的真实补丁，不启动游戏或服务器。
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+	def modVersion = project.version
+	inputs.property "version", modVersion
+
+	filesMatching("fabric.mod.json") {
+		expand "version": modVersion
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.encoding = 'UTF-8'
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// 测试日志与临时数据留在构建目录，避免污染项目根目录或用户存档。
+	workingDir = layout.buildDirectory.dir('test-work').get().asFile
+	doFirst {
+		workingDir.mkdirs()
+	}
+}

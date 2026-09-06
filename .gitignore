@@ -1,0 +1,29 @@
+# Gradle 与构建产物
+.gradle/
+build/
+out/
+
+# Minecraft 开发运行目录
+run/
+runs/
+logs/
+*.log
+
+# 开发工具
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# Python 工具缓存与导出标记
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.vanilla-fashion-public-export
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
