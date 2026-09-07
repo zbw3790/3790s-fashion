@@ -16,6 +16,7 @@ public final class VanillaFashionCapeRendering {
 				return;
 			}
 
+			WardrobePreviewEquipment.bind(context.getEquipmentAssets());
 			helper.register(new VanillaFashionCapeLayer(
 					avatarRenderer,
 					context.getModelSet(),

@@ -80,6 +80,77 @@ class WardrobeGuiPainterTest {
 	}
 
 	@Test
+	void previewFrameHasSinglePixelRecessedEdgesAndOpaqueDarkGrayInterior() {
+		for (int width : new int[]{192, 211}) {
+			WardrobeLayout layout = WardrobeLayout.calculate(width, 240, 9);
+			var outer = layout.previewBounds();
+			var inner = layout.previewInnerBounds();
+			Commands commands = new Commands();
+			WardrobeGuiPainter.previewFrame(commands, layout);
+			assertFalse(commands.rectangles.isEmpty());
+			for (Rectangle rectangle : commands.rectangles) {
+				assertTrue(rectangle.inside(outer));
+				assertEquals(255, rectangle.color() >>> 24);
+			}
+			for (int y = inner.y(); y < inner.bottom(); y++) {
+				for (int x = inner.x(); x < inner.right(); x++) {
+					assertEquals(0xFF202020, commands.colorAt(x, y));
+				}
+				assertEquals(WardrobeGuiPainter.SLOT_SHADOW_COLOR, commands.colorAt(outer.x(), y));
+				assertEquals(WardrobeGuiPainter.HIGHLIGHT_COLOR, commands.colorAt(outer.right() - 1, y));
+			}
+			for (int x = inner.x(); x < inner.right(); x++) {
+				assertEquals(WardrobeGuiPainter.SLOT_SHADOW_COLOR, commands.colorAt(x, outer.y()));
+				assertEquals(WardrobeGuiPainter.HIGHLIGHT_COLOR, commands.colorAt(x, outer.bottom() - 1));
+			}
+			assertEquals(WardrobeGuiPainter.SLOT_SHADOW_COLOR, commands.colorAt(outer.x(), outer.y()));
+			assertEquals(WardrobeGuiPainter.FRAME_COLOR, commands.colorAt(outer.right() - 1, outer.y()));
+			assertEquals(WardrobeGuiPainter.FRAME_COLOR, commands.colorAt(outer.x(), outer.bottom() - 1));
+			assertEquals(WardrobeGuiPainter.HIGHLIGHT_COLOR,
+					commands.colorAt(outer.right() - 1, outer.bottom() - 1));
+		}
+	}
+
+	@Test
+	void previewFrameDoesNotDrawOutsideTooSmallViewport() {
+		Commands commands = new Commands();
+		WardrobeGuiPainter.previewFrame(commands, WardrobeLayout.calculate(1, 1, 9));
+		assertTrue(commands.rectangles.isEmpty());
+	}
+
+	@Test
+	void previewMessageColorHasStrongContrastAgainstOpaqueDarkGray() {
+		assertEquals(0xFF202020, WardrobeGuiPainter.PREVIEW_BACKGROUND_COLOR);
+		assertEquals(255, WardrobeGuiPainter.PREVIEW_TEXT_COLOR >>> 24);
+		double contrast = (luminance(WardrobeGuiPainter.PREVIEW_TEXT_COLOR) + 0.05D)
+				/ (luminance(WardrobeGuiPainter.PREVIEW_BACKGROUND_COLOR) + 0.05D);
+		assertTrue(contrast >= 7.0D, "深灰底预览提示需要足够的明暗对比。");
+	}
+
+	@Test
+	void elytraIconFitsFixedCanvasWithMirroredTaperedWings() {
+		var icon = new WardrobeLayout.Bounds(20, 30, 16, 16);
+		Commands commands = new Commands();
+		WardrobeGuiPainter.elytraIcon(commands, icon);
+		assertFalse(commands.rectangles.isEmpty());
+		for (Rectangle rectangle : commands.rectangles) {
+			assertTrue(rectangle.inside(icon));
+			assertEquals(255, rectangle.color() >>> 24);
+		}
+		for (int y = 0; y < icon.height(); y++) {
+			for (int x = 0; x < icon.width(); x++) {
+				assertEquals(commands.colorAt(icon.x() + x, icon.y() + y),
+						commands.colorAt(icon.right() - 1 - x, icon.y() + y));
+			}
+		}
+		assertTrue(commands.colorAt(icon.x() + 2, icon.y() + 3) != 0);
+		assertEquals(0, commands.colorAt(icon.x() + 2, icon.y() + 12));
+		assertTrue(commands.colorAt(icon.x() + 6, icon.y() + 13) != 0);
+		assertEquals(0, commands.colorAt(icon.x() + 7, icon.y() + 13));
+		assertEquals(0, commands.colorAt(icon.x(), icon.y()));
+	}
+
+	@Test
 	void hoverAndDisabledOverlaysNeverCoverSlotEdgeOrNeighbour() {
 		var slot = new WardrobeLayout.Bounds(10, 20, 22, 34);
 		for (boolean disabled : new boolean[]{false, true}) {
@@ -136,6 +207,20 @@ class WardrobeGuiPainterTest {
 				new WardrobeLayout.Bounds(0, 0, 32, 32)));
 		assertThrows(IllegalArgumentException.class, () -> WardrobeGuiPainter.originalIcon(new Commands(),
 				new WardrobeLayout.Bounds(0, 0, 15, 16)));
+		assertThrows(IllegalArgumentException.class, () -> WardrobeGuiPainter.elytraIcon(new Commands(),
+				new WardrobeLayout.Bounds(0, 0, 18, 18)));
+	}
+
+	private static double luminance(int color) {
+		return 0.2126D * linearChannel((color >>> 16) & 0xFF)
+				+ 0.7152D * linearChannel((color >>> 8) & 0xFF)
+				+ 0.0722D * linearChannel(color & 0xFF);
+	}
+
+	private static double linearChannel(int channel) {
+		double normalized = channel / 255.0D;
+		return normalized <= 0.04045D ? normalized / 12.92D
+				: Math.pow((normalized + 0.055D) / 1.055D, 2.4D);
 	}
 
 	private record Rectangle(int left, int top, int right, int bottom, int color) {

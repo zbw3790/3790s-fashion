@@ -68,8 +68,12 @@ class WardrobeSelectionSessionTest {
 		assertEquals("当前披风正在同步", session.status(true, false, id -> false));
 		assertEquals(FIRST, session.baseline());
 		assertEquals(FIRST, session.draft());
+		assertEquals("", session.status(true, false, id -> true));
+		assertFalse(session.canFinish(true, false, id -> true));
+		assertFalse(session.finish(tracker(), true, id -> true).close());
+		assertTrue(session.canEdit());
+		session.select(SECOND);
 		assertTrue(session.canFinish(true, false, id -> true));
-		assertTrue(session.finish(tracker(), true, id -> true).close());
 	}
 
 	@Test void userSelectionMakesDirtyWithoutChangingBaseline() {
@@ -99,12 +103,17 @@ class WardrobeSelectionSessionTest {
 		assertEquals(SECOND, session.draft());
 	}
 
-	@Test void equalDraftClosesWithoutAllocationOrPacket() {
+	@ParameterizedTest @ValueSource(booleans = {false, true})
+	void equalDraftIsDisabledAndDoesNotCloseAllocateOrSend(boolean custom) {
 		var tracker = tracker();
-		var session = session(FIRST);
+		var session = session(custom ? FIRST : Optional.empty());
+		assertFalse(session.canFinish(true, false, id -> true));
 		var decision = session.finish(tracker, true, id -> true);
-		assertTrue(decision.close());
+		assertFalse(decision.close());
 		assertTrue(decision.request().isEmpty());
+		assertFalse(session.closed());
+		assertTrue(session.canEdit());
+		assertEquals(0, session.pendingRequestId());
 		assertFalse(tracker.hasOutstanding());
 		assertEquals(1, tracker.allocate().orElseThrow());
 	}
@@ -125,8 +134,9 @@ class WardrobeSelectionSessionTest {
 		assertEquals(1, tracker.outstandingCount());
 	}
 
-	@Test void unsupportedChannelDisablesEvenUnchangedFinish() {
+	@Test void unsupportedChannelDisablesChangedApplication() {
 		var session = session(FIRST);
+		session.select(SECOND);
 		assertFalse(session.canFinish(false, false, id -> true));
 		assertFalse(session.finish(tracker(), false, id -> true).close());
 		assertEquals("服务器不支持保存时装选择", session.status(false, false, id -> true));
@@ -152,7 +162,7 @@ class WardrobeSelectionSessionTest {
 	}
 
 	@ParameterizedTest @EnumSource(CapeSelectionReason.class)
-	void matchingResultClosesOnlyAcceptedAndRejectPreservesValidDraft(CapeSelectionReason reason) {
+	void matchingResultKeepsSessionEditableAndRejectPreservesValidDraft(CapeSelectionReason reason) {
 		var session = session(FIRST);
 		var tracker = tracker();
 		session.select(SECOND);
@@ -160,11 +170,12 @@ class WardrobeSelectionSessionTest {
 		var authoritative = reason.accepted() ? SECOND : FIRST;
 		var authoritativeState = authoritative.map(PlayerFashionAuthoritativeState::active)
 				.orElseGet(PlayerFashionAuthoritativeState::vanilla);
-		boolean close = session.acceptResult(new CapeSelectionResultPayload(
+		boolean applied = session.acceptResult(new CapeSelectionResultPayload(
 				id, reason.accepted(), authoritativeState, reason),
 				AVAILABLE, value -> true);
-		assertEquals(reason.accepted(), close);
-		assertEquals(reason.accepted(), session.closed());
+		assertEquals(reason.accepted(), applied);
+		assertFalse(session.closed());
+		assertTrue(session.canEdit());
 		assertEquals(0, session.pendingRequestId());
 		assertEquals(authoritative, session.baseline());
 		assertEquals(SECOND, session.draft());
@@ -172,6 +183,52 @@ class WardrobeSelectionSessionTest {
 			assertEquals(Optional.of(reason), session.lastError());
 			assertFalse(session.status(true, false, value -> true).contains(reason.name()));
 		}
+	}
+
+	@ParameterizedTest @ValueSource(strings = {"vanilla", "active", "dormant"})
+	void successAdoptsFullServerStateAndAllowsFurtherEditing(String returnedState) {
+		var session = session(FIRST);
+		var tracker = tracker();
+		session.select(SECOND);
+		long requestId = session.finish(tracker, true, id -> true).request().orElseThrow().requestId();
+		var authority = switch (returnedState) {
+			case "vanilla" -> PlayerFashionAuthoritativeState.vanilla();
+			case "active" -> PlayerFashionAuthoritativeState.active(FIRST.orElseThrow());
+			case "dormant" -> PlayerFashionAuthoritativeState.dormant(FIRST.orElseThrow());
+			default -> throw new IllegalArgumentException("未知测试权威状态。");
+		};
+		tracker.complete(requestId);
+		assertTrue(session.acceptResult(new CapeSelectionResultPayload(requestId, true,
+				authority, CapeSelectionReason.APPLIED), AVAILABLE, id -> true));
+		assertEquals(authority.storedSelection(), session.baseline());
+		assertEquals(authority.storedSelection(), session.draft());
+		assertEquals(authority.effectiveSelection(), session.previewSelection());
+		assertEquals(authority.isDormant(), session.dormant());
+		assertTrue(session.authorityKnown());
+		assertTrue(session.lastError().isEmpty());
+		assertEquals(0, session.pendingRequestId());
+		assertFalse(session.closed());
+		assertFalse(session.dirty());
+		assertFalse(session.canFinish(true, false, id -> true));
+		assertTrue(session.canEdit());
+		session.select(SECOND);
+		assertTrue(session.dirty());
+		assertTrue(session.canFinish(true, false, id -> true));
+		assertEquals(requestId + 1, session.finish(tracker, true, id -> true).request().orElseThrow().requestId());
+	}
+
+	@Test
+	void closedSessionCannotBeReactivatedByItsLateSuccessfulResult() {
+		var session = session(FIRST);
+		session.select(SECOND);
+		long requestId = session.finish(tracker(), true, id -> true).request().orElseThrow().requestId();
+		session.cancel();
+		assertFalse(session.acceptResult(new CapeSelectionResultPayload(requestId, true,
+				PlayerFashionAuthoritativeState.active(SECOND.orElseThrow()), CapeSelectionReason.APPLIED),
+				AVAILABLE, id -> true));
+		assertTrue(session.closed());
+		assertFalse(session.canEdit());
+		assertEquals(FIRST, session.baseline());
 	}
 
 	@Test void rejectedDisappearedDraftFallsBackToLatestAuthority() {
@@ -280,14 +337,18 @@ class WardrobeSelectionSessionTest {
 	}
 
 	@Test
-	void dormantUnchangedFinishClosesWithoutRequestEvenWhenMetadataMissing() {
+	void dormantUnchangedApplyIsDisabledAndKeepsTheSavedSelection() {
 		var tracker = tracker();
 		var session = session(PlayerFashionAuthoritativeState.dormant(FIRST.orElseThrow()));
-		assertTrue(session.canFinish(true, false, id -> false));
+		assertFalse(session.canFinish(true, false, id -> false));
 		var decision = session.finish(tracker, true, id -> false);
-		assertTrue(decision.close());
+		assertFalse(decision.close());
 		assertTrue(decision.request().isEmpty());
+		assertFalse(session.closed());
+		assertEquals(FIRST, session.baseline());
+		assertEquals(FIRST, session.draft());
 		assertFalse(tracker.hasOutstanding());
+		assertEquals(1, tracker.allocate().orElseThrow());
 	}
 
 	@Test

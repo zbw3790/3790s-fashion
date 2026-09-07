@@ -22,17 +22,21 @@ final class CapeGridEntryWidget extends AbstractButton {
 	private final Supplier<CapeWardrobeContent.SlotModel> modelLookup;
 	private final BooleanSupplier selected;
 	private final BooleanSupplier editable;
+	private final BooleanSupplier awaitingConfirmation;
 	private final Runnable onSelect;
 	private CapeWardrobeContent.SlotModel model;
 	private String tooltipText;
+	private boolean dimmed;
 
 	CapeGridEntryWidget(WardrobeLayout.Bounds bounds,
 			Supplier<CapeWardrobeContent.SlotModel> modelLookup,
-			BooleanSupplier selected, BooleanSupplier editable, Runnable onSelect) {
+			BooleanSupplier selected, BooleanSupplier editable,
+			BooleanSupplier awaitingConfirmation, Runnable onSelect) {
 		super(bounds.x(), bounds.y(), bounds.width(), bounds.height(), Component.empty());
 		this.modelLookup = Objects.requireNonNull(modelLookup);
 		this.selected = Objects.requireNonNull(selected);
 		this.editable = Objects.requireNonNull(editable);
+		this.awaitingConfirmation = Objects.requireNonNull(awaitingConfirmation);
 		this.onSelect = Objects.requireNonNull(onSelect);
 		refreshAvailability();
 	}
@@ -40,6 +44,8 @@ final class CapeGridEntryWidget extends AbstractButton {
 	void refreshAvailability() {
 		model = Objects.requireNonNull(modelLookup.get());
 		active = model.selectable() && editable.getAsBoolean();
+		// 与 active 同步刷新，避免 ACK 已到而控件尚未 tick 时短暂套回禁用遮罩。
+		dimmed = !active && !(model.selectable() && awaitingConfirmation.getAsBoolean());
 		String currentTooltip = model.tooltipText();
 		if (!currentTooltip.equals(tooltipText)) {
 			tooltipText = currentTooltip;
@@ -67,8 +73,13 @@ final class CapeGridEntryWidget extends AbstractButton {
 					getX() + 1, getY() + 1, CAPE_NORTH_X, CAPE_NORTH_Y, 20, 32,
 					CAPE_NORTH_WIDTH, CAPE_NORTH_HEIGHT, TEXTURE_WIDTH, TEXTURE_HEIGHT));
 		}
-		WardrobeGuiPainter.slotOverlay(graphics::fill, bounds,
-				isHoveredOrFocused(), selected.getAsBoolean(), !active);
+		extractOverlay(graphics::fill);
+	}
+
+	void extractOverlay(WardrobeGuiPainter.RectangleSink sink) {
+		var bounds = new WardrobeLayout.Bounds(getX(), getY(), getWidth(), getHeight());
+		WardrobeGuiPainter.slotOverlay(sink, bounds,
+				active && isHoveredOrFocused(), selected.getAsBoolean(), dimmed);
 	}
 
 	@Override

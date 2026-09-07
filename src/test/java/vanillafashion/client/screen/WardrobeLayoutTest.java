@@ -24,7 +24,7 @@ class WardrobeLayoutTest {
 		assertRelative(layout, layout.nextPageButtonBounds(), 175, 122, 12, 17);
 		assertRelative(layout, layout.statusBounds(), 8, 144, 115, 20);
 		assertRelative(layout, layout.applyButtonBounds(), 131, 142, 56, 20);
-		assertEquals(40, layout.previewEntitySize());
+		assertEquals(34, layout.previewEntitySize());
 	}
 
 	@Test
@@ -38,7 +38,68 @@ class WardrobeLayoutTest {
 		assertRelative(layout, layout.nextPageButtonBounds(), 156, 122, 12, 17);
 		assertRelative(layout, layout.statusBounds(), 8, 144, 96, 20);
 		assertRelative(layout, layout.applyButtonBounds(), 112, 142, 56, 20);
-		assertEquals(34, layout.previewEntitySize());
+		assertEquals(32, layout.previewEntitySize());
+	}
+
+	@Test
+	void previewInsetKeepsModelAndModeButtonInsideFrozenOuterFrame() {
+		for (int width : new int[]{192, 211, 320, 854}) {
+			WardrobeLayout layout = WardrobeLayout.calculate(width, 240, 9);
+			var outer = layout.previewBounds();
+			var inner = layout.previewInnerBounds();
+			var model = layout.previewModelBounds();
+			var button = layout.previewModeButtonBounds();
+			var icon = layout.previewModeIconBounds();
+			assertEquals(new WardrobeLayout.Bounds(outer.x() + 1, outer.y() + 1,
+					outer.width() - 2, 100), inner);
+			assertEquals(new WardrobeLayout.Bounds(outer.x() + 2, outer.y() + 2,
+					outer.width() - 4, 98), model);
+			assertEquals(new WardrobeLayout.Bounds(outer.right() - 20, outer.y() + 2, 18, 18), button);
+			assertEquals(new WardrobeLayout.Bounds(button.x() + 1, button.y() + 1, 16, 16), icon);
+			assertContained(inner, outer);
+			assertContained(model, inner);
+			assertContained(button, inner);
+			assertContained(icon, button);
+			assertEquals(outer.centerX(), model.centerX());
+			assertEquals(outer.centerY(), model.centerY());
+			var drag = layout.previewDragBounds();
+			assertContained(drag, model);
+			assertEquals(2, drag.y() - button.bottom());
+			assertFalse(drag.overlaps(button));
+			assertEquals(new WardrobeLayout.Bounds(outer.x() + 2, outer.y() + 22,
+					outer.width() - 4, 78), drag);
+		}
+	}
+
+	@Test
+	void previewDragAreaExcludesModeButtonBorderAndTopStrip() {
+		for (int width : new int[]{192, 211}) {
+			WardrobeLayout layout = WardrobeLayout.calculate(width, 240, 9);
+			var outer = layout.previewBounds();
+			var drag = layout.previewDragBounds();
+			var button = layout.previewModeButtonBounds();
+			assertTrue(drag.contains(drag.centerX(), drag.centerY()));
+			assertTrue(drag.contains(drag.x(), drag.y()));
+			assertFalse(drag.contains(button.centerX(), button.centerY()));
+			assertFalse(drag.contains(outer.centerX(), button.y()));
+			assertFalse(drag.contains(outer.x(), drag.centerY()));
+			assertFalse(drag.contains(drag.right(), drag.centerY()));
+			assertFalse(drag.contains(drag.centerX(), drag.bottom()));
+		}
+	}
+
+	@Test
+	void tinyViewportRetainsValidPreviewSubregionsForSafeDegradation() {
+		for (int[] viewport : new int[][]{{1, 1}, {191, 214}, {211, 213}}) {
+			WardrobeLayout layout = WardrobeLayout.calculate(viewport[0], viewport[1], 9);
+			assertFalse(layout.fitsScreen());
+			assertEquals(62, layout.previewBounds().width());
+			assertEquals(102, layout.previewBounds().height());
+			assertContained(layout.previewInnerBounds(), layout.previewBounds());
+			assertContained(layout.previewModelBounds(), layout.previewInnerBounds());
+			assertContained(layout.previewModeButtonBounds(), layout.previewInnerBounds());
+			assertFalse(layout.previewDragBounds().overlaps(layout.previewModeButtonBounds()));
+		}
 	}
 
 	@Test
@@ -172,6 +233,13 @@ class WardrobeLayoutTest {
 		assertThrows(IllegalArgumentException.class, () -> layout.entryBounds(-1));
 		assertThrows(IllegalArgumentException.class, () -> layout.entryBounds(12));
 		assertThrows(IllegalArgumentException.class, () -> layout.thumbnailBounds(12));
+	}
+
+	private static void assertContained(WardrobeLayout.Bounds inner, WardrobeLayout.Bounds outer) {
+		assertTrue(inner.x() >= outer.x());
+		assertTrue(inner.y() >= outer.y());
+		assertTrue(inner.right() <= outer.right());
+		assertTrue(inner.bottom() <= outer.bottom());
 	}
 
 	private static void assertRelative(WardrobeLayout layout, WardrobeLayout.Bounds actual,

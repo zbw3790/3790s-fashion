@@ -13,6 +13,8 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ImageButton;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -50,14 +52,16 @@ class WardrobeScreenInteractionTest {
 	}
 
 	@Test
-	void unchangedApplyUsesActualButtonClosesWithoutAllocatingRequest() {
+	void unchangedApplyIsDisabledAndProgrammaticEntryDoesNotCloseOrAllocateRequest() {
 		var fixture = new Fixture();
 		var screen = fixture.open();
 		var apply = applyButton(screen);
 		assertEquals("应用", apply.getMessage().getString());
+		assertFalse(apply.active);
 		apply.onPress(new KeyEvent(257, 0, 0));
-		assertTrue(screen.selectionSession().closed());
-		assertEquals(1, fixture.closed.get());
+		screen.applySelection();
+		assertFalse(screen.selectionSession().closed());
+		assertEquals(0, fixture.closed.get());
 		assertTrue(fixture.sent.isEmpty());
 		assertFalse(fixture.requests.hasOutstanding());
 		assertEquals(1, fixture.requests.allocate().orElseThrow());
@@ -135,19 +139,21 @@ class WardrobeScreenInteractionTest {
 		assertEquals(1, fixture.sent.size());
 	}
 
-	@Test
-	void acceptedResultClosesMatchingScreenAndReopenUsesSavedChoice() {
+	@ParameterizedTest
+	@ValueSource(ints = {256, 69})
+	void acceptedResultKeepsScreenAndDiscardingNextDraftReopensSavedChoice(int key) {
 		var fixture = new Fixture();
 		var screen = fixture.open();
 		screen.selectionSession().select(Optional.of(SECOND));
 		screen.applySelection();
 		assertTrue(fixture.result(new CapeSelectionResultPayload(fixture.sent.getFirst().requestId(), true,
 				PlayerFashionAuthoritativeState.active(SECOND), CapeSelectionReason.APPLIED), screen));
-		assertEquals(1, fixture.closed.get());
-		var reopened = fixture.open();
-		reopened.selectionSession().select(Optional.of(FIRST));
-		reopened.keyPressed(new KeyEvent(69, 0, 0));
+		assertEquals(0, fixture.closed.get());
+		assertFalse(screen.selectionSession().closed());
+		screen.selectionSession().select(Optional.of(FIRST));
+		screen.keyPressed(new KeyEvent(key, 0, 0));
 		assertEquals(Optional.of(SECOND), fixture.open().selectionSession().draft());
+		assertEquals(1, fixture.sent.size());
 	}
 
 	@Test
@@ -287,6 +293,189 @@ class WardrobeScreenInteractionTest {
 		assertSame(first, screen.getFocused());
 	}
 
+
+	@ParameterizedTest
+	@ValueSource(ints = {257, 32})
+	void previewButtonActivationChangesOnlyScreenLocalMode(int key) {
+		var fixture = new Fixture();
+		var screen = fixture.open();
+		var session = screen.selectionSession();
+		session.select(Optional.of(SECOND));
+		var baseline = session.baseline();
+		var draft = session.draft();
+		screen.capeContent().changePage(true);
+		screen.previewRotation().beginDrag(screen.layout().previewDragBounds().centerX(),
+				screen.layout().previewDragBounds().centerY(), 0, screen.layout().previewDragBounds());
+		screen.previewRotation().drag(0, 43);
+		screen.previewRotation().endDrag(0);
+		var button = previewButton(screen);
+
+		assertEquals(WardrobePreviewMode.CAPE, screen.previewMode());
+		assertEquals("当前预览：披风；点击查看鞘翅", button.getMessage().getString());
+		screen.setFocused(button);
+		assertSame(button, screen.getFocused());
+		button.onPress(new KeyEvent(key, 0, 0));
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertEquals("当前预览：鞘翅；点击查看披风", button.getMessage().getString());
+		assertTrue(screen.getNarrationMessage().getString().contains("当前预览：鞘翅"));
+		assertEquals(baseline, session.baseline());
+		assertEquals(draft, session.draft());
+		assertTrue(session.dirty());
+		assertEquals(1, screen.capeContent().pageIndex());
+		assertEquals(223.0F, screen.previewRotation().yawDegrees());
+		assertEquals(Optional.of(FIRST), fixture.authority().storedSelection());
+		assertTrue(fixture.sent.isEmpty());
+		assertFalse(fixture.requests.hasOutstanding());
+
+		button.onPress(new KeyEvent(key, 0, 0));
+		assertEquals(WardrobePreviewMode.CAPE, screen.previewMode());
+		assertEquals(baseline, session.baseline());
+		assertEquals(draft, session.draft());
+		assertEquals(1, fixture.requests.allocate().orElseThrow());
+	}
+
+	@ParameterizedTest
+	@ValueSource(ints = {320, 200})
+	void previewClickAndDragRegionsDoNotOverlap(int width) {
+		var screen = new Fixture().open();
+		screen.resize(width, 240);
+		var button = previewButton(screen);
+		var buttonBounds = screen.layout().previewModeButtonBounds();
+		var dragBounds = screen.layout().previewDragBounds();
+		assertFalse(buttonBounds.overlaps(dragBounds));
+		assertTrue(button.isMouseOver(buttonBounds.centerX(), buttonBounds.centerY()));
+		assertFalse(screen.previewRotation().beginDrag(buttonBounds.centerX(), buttonBounds.centerY(),
+				0, dragBounds));
+
+		// 直接执行 Vanilla onClick→onPress，避免普通 JVM 访问游戏 SoundManager。
+		button.onClick(mouse(buttonBounds.centerX(), buttonBounds.centerY(), 0), false);
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertFalse(screen.previewRotation().isDragging());
+		assertFalse(screen.mouseDragged(mouse(buttonBounds.centerX(), buttonBounds.centerY(), 0), 40, 0));
+		assertEquals(180.0F, screen.previewRotation().yawDegrees());
+		// 26.2 容器会消费命中子控件的右键，但按钮不激活，也不启动拖动。
+		assertTrue(screen.mouseClicked(mouse(buttonBounds.centerX(), buttonBounds.centerY(), 1), false));
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertFalse(screen.previewRotation().isDragging());
+
+		assertTrue(screen.mouseClicked(mouse(dragBounds.centerX(), dragBounds.centerY(), 0), false));
+		assertTrue(screen.mouseDragged(mouse(dragBounds.centerX(), dragBounds.centerY(), 0), 43, 9));
+		assertEquals(223.0F, screen.previewRotation().yawDegrees());
+		assertTrue(screen.mouseReleased(mouse(dragBounds.centerX(), dragBounds.centerY(), 0)));
+		assertFalse(screen.previewRotation().isDragging());
+		assertFalse(screen.mouseClicked(mouse(screen.layout().previewBounds().x(),
+				screen.layout().previewBounds().y(), 0), false));
+	}
+
+	@Test
+	void pendingAllowsPreviewModeAndRotationButNotCapeEditingOrDuplicateApply() {
+		var fixture = new Fixture();
+		var screen = fixture.open();
+		screen.selectionSession().select(Optional.of(SECOND));
+		screen.applySelection();
+		long pending = screen.selectionSession().pendingRequestId();
+		var button = previewButton(screen);
+		assertTrue(button.active);
+		button.onPress(new KeyEvent(32, 0, 0));
+		var bounds = screen.layout().previewDragBounds();
+		assertTrue(screen.mouseClicked(mouse(bounds.centerX(), bounds.centerY(), 0), false));
+		assertTrue(screen.mouseDragged(mouse(bounds.centerX(), bounds.centerY(), 0), 22, 0));
+		screen.mouseReleased(mouse(bounds.centerX(), bounds.centerY(), 0));
+		screen.selectionSession().select(Optional.empty());
+		screen.applySelection();
+		assertEquals(Optional.of(SECOND), screen.selectionSession().draft());
+		assertEquals(pending, screen.selectionSession().pendingRequestId());
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertEquals(202.0F, screen.previewRotation().yawDegrees());
+		assertEquals(1, fixture.sent.size());
+		assertFalse(applyButton(screen).active);
+	}
+
+	@Test
+	void successfulAckKeepsSameScreenPageYawModeAndAllowsSecondApplication() {
+		var fixture = new Fixture();
+		var screen = fixture.open();
+		var session = screen.selectionSession();
+		screen.capeContent().changePage(true);
+		previewButton(screen).onPress(new KeyEvent(257, 0, 0));
+		var bounds = screen.layout().previewDragBounds();
+		screen.mouseClicked(mouse(bounds.centerX(), bounds.centerY(), 0), false);
+		screen.mouseDragged(mouse(bounds.centerX(), bounds.centerY(), 0), 71, 0);
+		screen.mouseReleased(mouse(bounds.centerX(), bounds.centerY(), 0));
+		session.select(Optional.of(SECOND));
+		screen.applySelection();
+		assertTrue(fixture.result(new CapeSelectionResultPayload(fixture.sent.getFirst().requestId(), true,
+				PlayerFashionAuthoritativeState.active(SECOND), CapeSelectionReason.APPLIED), screen));
+		assertSame(session, screen.selectionSession());
+		assertFalse(session.closed());
+		assertFalse(session.dirty());
+		assertEquals(Optional.of(SECOND), session.baseline());
+		assertEquals(session.baseline(), session.draft());
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertEquals(251.0F, screen.previewRotation().yawDegrees());
+		assertEquals(1, screen.capeContent().pageIndex());
+		assertEquals(WardrobeScreen.SelectedTab.CAPE, screen.selectedTab());
+		assertFalse(applyButton(screen).active);
+		assertTrue(session.lastError().isEmpty());
+		session.select(Optional.of(FIRST));
+		screen.applySelection();
+		assertEquals(2, fixture.sent.size());
+		assertTrue(fixture.result(new CapeSelectionResultPayload(fixture.sent.getLast().requestId(), true,
+				PlayerFashionAuthoritativeState.active(FIRST), CapeSelectionReason.APPLIED), screen));
+		assertFalse(session.closed());
+		assertFalse(session.dirty());
+		assertEquals(Optional.of(FIRST), session.draft());
+		assertEquals(Optional.of(FIRST), fixture.authority().storedSelection());
+		assertEquals(0, fixture.closed.get());
+	}
+
+	@Test
+	void resizeAndEmergencyPreservePreviewModeButReopenDefaultsToCape() {
+		var fixture = new Fixture();
+		var screen = fixture.open();
+		previewButton(screen).onPress(new KeyEvent(257, 0, 0));
+		assertFalse(screen.selectionSession().dirty());
+		screen.resize(200, 240);
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertEquals("当前预览：鞘翅；点击查看披风", previewButton(screen).getMessage().getString());
+		screen.resize(1, 1);
+		assertTrue(screen.children().isEmpty());
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		screen.resize(320, 240);
+		assertEquals(WardrobePreviewMode.ELYTRA, screen.previewMode());
+		assertFalse(screen.selectionSession().dirty());
+		screen.keyPressed(new KeyEvent(69, 0, 0));
+		assertEquals(WardrobePreviewMode.CAPE, fixture.open().previewMode());
+		assertTrue(fixture.sent.isEmpty());
+	}
+
+	@Test
+	void vanillaTabTraversalIncludesPreviewButtonInBothDirections() {
+		var screen = new Fixture().open();
+		var preview = previewButton(screen);
+		boolean forward = false;
+		boolean backward = false;
+		for (int i = 0; i < 30; i++) {
+			screen.keyPressed(new KeyEvent(258, 0, 0));
+			forward |= screen.getFocused() == preview;
+		}
+		for (int i = 0; i < 30; i++) {
+			screen.keyPressed(new KeyEvent(258, 0, 1));
+			backward |= screen.getFocused() == preview;
+		}
+		assertTrue(forward);
+		assertTrue(backward);
+	}
+
+	private static MouseButtonEvent mouse(double x, double y, int button) {
+		return new MouseButtonEvent(x, y, new MouseButtonInfo(button, 0));
+	}
+
+	private static WardrobePreviewModeButton previewButton(WardrobeScreen screen) {
+		return screen.children().stream().filter(WardrobePreviewModeButton.class::isInstance)
+				.map(WardrobePreviewModeButton.class::cast).findFirst().orElseThrow();
+	}
+
 	private static Button applyButton(WardrobeScreen screen) {
 		return screen.children().stream().filter(Button.class::isInstance)
 				.filter(widget -> !(widget instanceof ImageButton)).map(Button.class::cast)
@@ -329,12 +518,12 @@ class WardrobeScreenInteractionTest {
 		}
 
 		boolean result(CapeSelectionResultPayload result, WardrobeScreen screen) {
-			boolean close = ClientCapeSelectionResults.apply(connection, SELF, result, fashions, requests,
+			boolean accepted = ClientCapeSelectionResults.apply(connection, SELF, result, fashions, requests,
 					() -> screen == null ? null : screen.selectionSession(), id -> capes.find(id).isPresent());
-			if (close) {
-				screen.onClose();
+			if (screen != null) {
+				screen.tick();
 			}
-			return close;
+			return accepted;
 		}
 	}
 }

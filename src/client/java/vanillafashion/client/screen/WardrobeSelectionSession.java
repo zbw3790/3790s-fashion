@@ -68,26 +68,15 @@ public final class WardrobeSelectionSession {
 	public boolean closed() { return closed; }
 
 	public boolean canFinish(boolean channelSupported, boolean outstanding, Predicate<CapeId> metadataPresent) {
-		return !closed && authorityKnown && snapshotState == ClientPlayerFashionRegistry.State.AVAILABLE
+		return !closed && authorityKnown && dirty() && snapshotState == ClientPlayerFashionRegistry.State.AVAILABLE
 				&& pendingRequestId == 0 && !outstanding && channelSupported
-				&& finishMetadataSafe(metadataPresent);
-	}
-
-	private boolean finishMetadataSafe(Predicate<CapeId> metadataPresent) {
-		if (dirty()) {
-			return draft.map(metadataPresent::test).orElse(true);
-		}
-		return isDormant() || baseline.map(metadataPresent::test).orElse(true);
+				&& draft.map(metadataPresent::test).orElse(true);
 	}
 
 	public FinishDecision finish(ClientCapeSelectionRequestTracker tracker, boolean channelSupported,
 			Predicate<CapeId> metadataPresent) {
 		if (!canFinish(channelSupported, tracker.hasOutstanding(), metadataPresent)) {
 			return new FinishDecision(false, Optional.empty());
-		}
-		if (!dirty()) {
-			closed = true;
-			return new FinishDecision(true, Optional.empty());
 		}
 		var allocated = tracker.allocate();
 		if (allocated.isEmpty()) {
@@ -101,6 +90,7 @@ public final class WardrobeSelectionSession {
 
 	public boolean owns(long requestId) { return !closed && pendingRequestId != 0 && pendingRequestId == requestId; }
 
+	/** 返回当前匹配会话是否收到成功确认；成功后继续编辑，不表示关闭界面。 */
 	public boolean acceptResult(CapeSelectionResultPayload result, ClientPlayerFashionRegistry.State state,
 			Predicate<CapeId> metadataPresent) {
 		if (!owns(result.requestId())) {
@@ -113,8 +103,8 @@ public final class WardrobeSelectionSession {
 		authority = Optional.of(result.authoritativeState());
 		baseline = result.authoritativeState().storedSelection();
 		if (result.accepted()) {
+			draft = baseline;
 			lastError = Optional.empty();
-			closed = true;
 			return true;
 		}
 		lastError = Optional.of(result.reason());
@@ -124,7 +114,7 @@ public final class WardrobeSelectionSession {
 		return false;
 	}
 
-	/** Cancel、ESC 与 Screen 被替换只关闭本会话，不撤销连接级 outstanding。 */
+	/** ESC、物品栏键与 Screen 被替换只关闭本会话，不撤销连接级 outstanding。 */
 	public void cancel() { closed = true; }
 
 	public void tick() {

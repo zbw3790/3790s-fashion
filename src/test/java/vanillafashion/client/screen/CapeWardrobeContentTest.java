@@ -236,6 +236,92 @@ class CapeWardrobeContentTest {
 		assertEquals(authority, registry.find(player).orElseThrow());
 	}
 
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	void pendingKeepsReadyOverlayAndTextureStableUntilAcceptedOrRejected(boolean accepted) {
+		var selection = session(PlayerFashionAuthoritativeState.vanilla());
+		var content = new CapeWardrobeContent(() -> entries(2), READY, selection);
+		assertTrue(content.activateSlot(1));
+		var widgets = build(content, STANDARD).stream().filter(CapeGridEntryWidget.class::isInstance)
+				.map(CapeGridEntryWidget.class::cast).toList();
+		var before = widgets.stream().map(CapeWardrobeContentTest::overlay).toList();
+		var textures = content.slots().stream().map(CapeWardrobeContent.SlotModel::texture).toList();
+		var draft = selection.draft();
+		var tracker = new ClientCapeSelectionRequestTracker();
+		tracker.beginConnection(new Object());
+		var request = selection.finish(tracker, true, content::hasMetadata).request().orElseThrow();
+
+		// 多次刷新覆盖慢 ACK；断言实际绘制指令，而非只检查一个视觉状态标志。
+		for (int tick = 0; tick < 20; tick++) {
+			selection.tick();
+			assertFalse(content.refresh(false));
+			assertEquals(before, widgets.stream().map(CapeWardrobeContentTest::overlay).toList());
+			assertEquals(textures, content.slots().stream().map(CapeWardrobeContent.SlotModel::texture).toList());
+			for (var widget : widgets) {
+				assertFalse(widget.active);
+				widget.onPress(null);
+			}
+			assertEquals(draft, selection.draft());
+			assertFalse(content.activateSlot(2));
+			assertTrue(selection.finish(tracker, true, content::hasMetadata).request().isEmpty());
+		}
+		assertEquals(1, tracker.outstandingCount());
+		assertEquals("正在保存…", selection.status(true, true, content::hasMetadata));
+		widgets.getFirst().setFocused(true);
+		assertEquals(before.getFirst(), overlay(widgets.getFirst()));
+		widgets.getFirst().setFocused(false);
+
+		assertTrue(tracker.complete(request.requestId()));
+		var authority = accepted ? PlayerFashionAuthoritativeState.active(draft.orElseThrow())
+				: PlayerFashionAuthoritativeState.vanilla();
+		assertEquals(accepted, selection.acceptResult(new CapeSelectionResultPayload(request.requestId(), accepted,
+				authority, accepted ? CapeSelectionReason.APPLIED : CapeSelectionReason.NOT_ALLOWED),
+				ClientPlayerFashionRegistry.State.AVAILABLE, content::hasMetadata));
+		// 网络回调与下次 UI tick 之间也可能绘制一帧，此时不能恢复黑色覆盖。
+		assertEquals(before, widgets.stream().map(CapeWardrobeContentTest::overlay).toList());
+		content.refresh(false);
+		assertTrue(widgets.stream().allMatch(widget -> widget.active));
+		assertEquals(before, widgets.stream().map(CapeWardrobeContentTest::overlay).toList());
+		assertEquals(textures, content.slots().stream().map(CapeWardrobeContent.SlotModel::texture).toList());
+		assertTrue(content.activateSlot(2));
+		assertTrue(selection.finish(tracker, true, content::hasMetadata).request().isPresent());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"LOADING", "UNAVAILABLE", "UNKNOWN_AUTHORITY", "CLOSED"})
+	void pendingDoesNotHideGenuineUnavailableOverlay(String condition) {
+		var texture = new AtomicReference<>(Optional.of(TEXTURE));
+		var selection = session(PlayerFashionAuthoritativeState.vanilla());
+		var content = new CapeWardrobeContent(() -> entries(1), ignored -> texture.get(), selection);
+		assertTrue(content.activateSlot(1));
+		var widgets = build(content, STANDARD);
+		var cape = (CapeGridEntryWidget) widgets.get(1);
+		var tracker = new ClientCapeSelectionRequestTracker();
+		tracker.beginConnection(new Object());
+		selection.finish(tracker, true, content::hasMetadata).request().orElseThrow();
+		switch (condition) {
+			case "LOADING" -> texture.set(Optional.empty());
+			case "UNAVAILABLE" -> { }
+			case "UNKNOWN_AUTHORITY" -> selection.observe(Optional.empty(),
+					ClientPlayerFashionRegistry.State.UNINITIALIZED);
+			case "CLOSED" -> selection.cancel();
+			default -> fail("未覆盖的不可用状态。");
+		}
+		content.refresh(condition.equals("UNAVAILABLE"));
+		assertFalse(cape.active);
+		assertTrue(overlay(cape).stream().anyMatch(command -> command.get(4) == WardrobeGuiPainter.DISABLED_COLOR));
+		var draft = selection.draft();
+		cape.onPress(null);
+		assertEquals(draft, selection.draft());
+	}
+
+	private static List<List<Integer>> overlay(CapeGridEntryWidget widget) {
+		var commands = new ArrayList<List<Integer>>();
+		widget.extractOverlay((left, top, right, bottom, color) ->
+				commands.add(List.of(left, top, right, bottom, color)));
+		return commands;
+	}
+
 	@Test
 	void directPressHonorsVisibilityAndActiveGate() {
 		var selection = session(PlayerFashionAuthoritativeState.vanilla());

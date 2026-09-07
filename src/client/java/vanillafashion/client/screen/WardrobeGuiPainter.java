@@ -3,6 +3,8 @@ package vanillafashion.client.screen;
 /** 将已批准的原创像素几何提交给 Minecraft GUI 矩形提取入口。 */
 final class WardrobeGuiPainter {
 	static final int TEXT_COLOR = 0xFF404040;
+	static final int PREVIEW_BACKGROUND_COLOR = 0xFF202020;
+	static final int PREVIEW_TEXT_COLOR = 0xFFE0E0E0;
 	static final int FRAME_COLOR = 0xFFC6C6C6;
 	static final int OUTLINE_COLOR = 0xFF000000;
 	static final int HIGHLIGHT_COLOR = 0xFFFFFFFF;
@@ -21,6 +23,10 @@ final class WardrobeGuiPainter {
 	private static final int ORIGINAL_ARROW_COLOR = 0xFFE6ECEC;
 	private static final int ORIGINAL_EDGE_COLOR = 0xFF515A60;
 	private static final int ORIGINAL_BASE_COLOR = 0xFFC3C7C8;
+	private static final int ELYTRA_EDGE_COLOR = 0xFF4C535A;
+	private static final int ELYTRA_HIGHLIGHT_COLOR = 0xFFE0E4E5;
+	private static final int ELYTRA_BASE_COLOR = 0xFFB4BCC1;
+	private static final int ELYTRA_SHADOW_COLOR = 0xFF7A858D;
 	private static final String[][] CORNERS = {
 			{"..KK", ".KWW", "KWWW", "KWWW"},
 			{"K...", "WK..", "WGK.", "GSSK"},
@@ -39,6 +45,14 @@ final class WardrobeGuiPainter {
 			"..a..bccccca....", "aaaaabcccccb....", ".aaa.bcccccb....", ".aaa.bcccccb....",
 			"..a..bcccccb....", ".....bcccccb....", ".....bcccccb....", ".....bcccccb....",
 			".....bcccccb....", ".....bbbbbbb....", "................", "................"
+	};
+
+	// 仅用于预览模式按钮的原创双翼轮廓，不读取或缩放原版物品纹理。
+	private static final String[] ELYTRA_ICON = {
+			"................", "....dd....dd....", "...defd..dfed...", "..deefgddgfeed..",
+			"..deffgddgffed..", "..dffggddggffd..", "...dfggddggfd...", "...dfggddggfd...",
+			"....dggddggd....", "....dfgddgfd....", ".....dgddgd.....", ".....dgddgd.....",
+			"......dddd......", "......d..d......", "................", "................"
 	};
 
 	private WardrobeGuiPainter() { }
@@ -100,12 +114,32 @@ final class WardrobeGuiPainter {
 		rect(sink, x + w - 1, y + 1, 1, h - 1, HIGHLIGHT_COLOR);
 	}
 
+	static void previewFrame(RectangleSink sink, WardrobeLayout layout) {
+		if (!layout.fitsScreen()) {
+			return;
+		}
+		var bounds = layout.previewBounds();
+		int x = bounds.x(), y = bounds.y(), w = bounds.width(), h = bounds.height();
+		// 单像素下沉边沿用容器灰阶，交叉角为中性灰；深灰底内不添加装饰。
+		rect(sink, x, y, w, h, FRAME_COLOR);
+		rect(sink, x, y, w - 1, 1, SLOT_SHADOW_COLOR);
+		rect(sink, x, y, 1, h - 1, SLOT_SHADOW_COLOR);
+		rect(sink, x + 1, y + h - 1, w - 1, 1, HIGHLIGHT_COLOR);
+		rect(sink, x + w - 1, y + 1, 1, h - 1, HIGHLIGHT_COLOR);
+		var inner = layout.previewInnerBounds();
+		rect(sink, inner.x(), inner.y(), inner.width(), inner.height(), PREVIEW_BACKGROUND_COLOR);
+	}
+
 	static void capeIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
 		icon(sink, bounds, CAPE_ICON);
 	}
 
 	static void originalIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
 		icon(sink, bounds, ORIGINAL_ICON);
+	}
+
+	static void elytraIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
+		icon(sink, bounds, ELYTRA_ICON);
 	}
 
 	private static void icon(RectangleSink sink, WardrobeLayout.Bounds bounds, String[] rows) {
@@ -161,6 +195,10 @@ final class WardrobeGuiPainter {
 			case 'a' -> ORIGINAL_ARROW_COLOR;
 			case 'b' -> ORIGINAL_EDGE_COLOR;
 			case 'c' -> ORIGINAL_BASE_COLOR;
+			case 'd' -> ELYTRA_EDGE_COLOR;
+			case 'e' -> ELYTRA_HIGHLIGHT_COLOR;
+			case 'f' -> ELYTRA_BASE_COLOR;
+			case 'g' -> ELYTRA_SHADOW_COLOR;
 			default -> throw new IllegalArgumentException("未知衣柜像素标记。");
 		};
 	}

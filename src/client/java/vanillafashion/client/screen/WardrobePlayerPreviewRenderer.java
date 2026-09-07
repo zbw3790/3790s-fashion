@@ -10,52 +10,57 @@ import net.minecraft.world.entity.Pose;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import vanillafashion.client.render.WardrobePreviewAppearance;
+import vanillafashion.client.render.WardrobePreviewEquipment;
 import vanillafashion.client.render.WardrobePreviewRenderState;
 
 final class WardrobePlayerPreviewRenderer {
 	private static final float RENDER_STATE_PARTIAL_TICK = 1.0F;
 	private static final float VANILLA_FRONT_BODY_ROTATION_DEGREES = 180.0F;
-	private static final float MOUSE_ANGLE_DIVISOR = 40.0F;
-	private static final float MOUSE_ANGLE_SCALE_DEGREES = 20.0F;
-	private static final float DEGREES_TO_RADIANS = (float) (Math.PI / 180.0D);
 
 	boolean extract(
 			GuiGraphicsExtractor graphics,
-			WardrobeLayout.Bounds previewBounds,
+			WardrobeLayout.Bounds modelBounds,
 			int entitySize,
 			float offsetY,
 			int mouseY,
 			float previewYawDegrees,
 			LocalPlayer player,
-			WardrobePreviewAppearance appearance
+			WardrobePreviewAppearance appearance,
+			WardrobePreviewMode mode
 	) {
+		var equipmentAssets = WardrobePreviewEquipment.assets();
+		if (equipmentAssets.isEmpty()) {
+			return false;
+		}
 		EntityRenderer<? super LocalPlayer, ?> renderer = Minecraft.getInstance()
 				.getEntityRenderDispatcher()
 				.getRenderer(player);
+		// 26.2 AvatarRenderer 的无参工厂每次 new；实体装备提取也使用副本。
 		EntityRenderState extractedState = renderer.createRenderState(player, RENDER_STATE_PARTIAL_TICK);
 
 		if (!(extractedState instanceof AvatarRenderState state)) {
 			return false;
 		}
 
+		float centerY = (modelBounds.y() + modelBounds.bottom()) / 2.0F;
+		var configuration = WardrobePreviewConfiguration.fromMouse(mode, centerY, mouseY);
+		configuration.apply(state, equipment -> WardrobePreviewEquipment.hasWings(
+				equipment, equipmentAssets.orElseThrow()));
 		state.shadowPieces.clear();
 		state.outlineColor = 0;
 		WardrobePreviewRenderState.attach(state, appearance);
 
-		float centerY = (previewBounds.y() + previewBounds.bottom()) / 2.0F;
-		float verticalMouseAngle = (float) Math.atan((centerY - mouseY) / MOUSE_ANGLE_DIVISOR);
-		Quaternionf modelRotation = new Quaternionf().rotateZ((float) Math.PI);
-		Quaternionf cameraOrientation = new Quaternionf().rotateX(
-				verticalMouseAngle * MOUSE_ANGLE_SCALE_DEGREES * DEGREES_TO_RADIANS
-		);
-		modelRotation.mul(cameraOrientation);
+		Quaternionf cameraOrientation = configuration.cameraOrientation();
+		Quaternionf modelRotation = new Quaternionf().rotateZ((float) Math.PI).mul(cameraOrientation);
 
-		// 与 Minecraft 26.2 InventoryScreen 的 GUI 预览变换一致，只把水平朝向交给界面拖动状态。
+		// 水平拖动与默认背面保持原行为，两处垂直变换共用同一个受限角度。
 		state.bodyRot = VANILLA_FRONT_BODY_ROTATION_DEGREES - previewYawDegrees;
 		state.yRot = 0.0F;
-		state.xRot = state.pose == Pose.FALL_FLYING
-				? 0.0F
-				: -verticalMouseAngle * MOUSE_ANGLE_SCALE_DEGREES;
+		if (mode == WardrobePreviewMode.ELYTRA) {
+			var standingDimensions = player.getDimensions(Pose.STANDING);
+			state.boundingBoxWidth = standingDimensions.width();
+			state.boundingBoxHeight = standingDimensions.height();
+		}
 		state.boundingBoxWidth /= state.scale;
 		state.boundingBoxHeight /= state.scale;
 		state.scale = 1.0F;
@@ -65,16 +70,17 @@ final class WardrobePlayerPreviewRenderer {
 				state.boundingBoxHeight / 2.0F + offsetY,
 				0.0F
 		);
+		// GUI record 持有本次状态与新建变换；提交后不再修改或复用。
 		graphics.entity(
 				state,
 				entitySize,
 				translation,
 				modelRotation,
 				cameraOrientation,
-				previewBounds.x() + 1,
-				previewBounds.y() + 1,
-				previewBounds.right() - 1,
-				previewBounds.bottom() - 1
+				modelBounds.x(),
+				modelBounds.y(),
+				modelBounds.right(),
+				modelBounds.bottom()
 		);
 		return true;
 	}

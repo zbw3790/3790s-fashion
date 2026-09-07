@@ -11,7 +11,7 @@ import vanillafashion.network.CapeSelectionResultPayload;
 public final class ClientCapeSelectionResults {
 	private ClientCapeSelectionResults() { }
 
-	/** 先应用权威信息，再结束 outstanding，最后才查询当前 UI；不保存旧 Screen。 */
+	/** 先应用权威信息，再结束 outstanding，最后才查询当前 UI；返回匹配会话是否成功应用，不关闭 Screen。 */
 	public static boolean apply(Object connection, UUID self, CapeSelectionResultPayload result,
 			ClientPlayerFashionRegistry fashions, ClientCapeSelectionRequestTracker tracker,
 			Supplier<WardrobeSelectionSession> currentSession, Predicate<CapeId> metadataPresent) {

@@ -48,6 +48,7 @@ public final class WardrobeScreen extends Screen {
 	private final WardrobePreviewRotation previewRotation = new WardrobePreviewRotation();
 	private final WardrobePlayerPreviewRenderer previewRenderer = new WardrobePlayerPreviewRenderer();
 	private final SelectedTab selectedTab = SelectedTab.CAPE;
+	private WardrobePreviewMode previewMode = WardrobePreviewMode.CAPE;
 	private WardrobePreviewAppearanceResolver previewAppearanceResolver;
 	private List<CapeCosmeticMetadata> previewMetadata;
 	private WardrobeLayout layout;
@@ -94,6 +95,8 @@ public final class WardrobeScreen extends Screen {
 		capeContent.buildWidgets(layout, widget -> addRenderableWidget(widget), this::rebuildWidgets);
 		if (layout.fitsScreen()) {
 			addRenderableWidget(new CapeTabWidget(layout.tabBounds()));
+			addRenderableWidget(new WardrobePreviewModeButton(layout.previewModeButtonBounds(),
+					() -> previewMode, () -> previewMode = previewMode.next()));
 			var bounds = layout.applyButtonBounds();
 			applyButton = addRenderableWidget(Button.builder(APPLY, button -> applySelection())
 					.bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height()).build());
@@ -145,11 +148,7 @@ public final class WardrobeScreen extends Screen {
 		refreshSelection();
 		var decision = selection.finish(requests, canSendSelection(), capeContent::hasMetadata);
 		decision.request().ifPresent(actions.send());
-		if (decision.close()) {
-			onClose();
-		} else {
-			refreshSelection();
-		}
+		refreshSelection();
 	}
 
 	@Override
@@ -190,6 +189,10 @@ public final class WardrobeScreen extends Screen {
 		return previewRotation;
 	}
 
+	WardrobePreviewMode previewMode() {
+		return previewMode;
+	}
+
 	SelectedTab selectedTab() {
 		return selectedTab;
 	}
@@ -201,7 +204,9 @@ public final class WardrobeScreen extends Screen {
 
 	@Override
 	public Component getNarrationMessage() {
-		return Component.literal("衣柜，披风。" + statusText().narration());
+		return Component.literal("衣柜，披风。当前预览："
+				+ (previewMode == WardrobePreviewMode.CAPE ? "披风。" : "鞘翅。")
+				+ statusText().narration());
 	}
 
 	@Override
@@ -213,6 +218,7 @@ public final class WardrobeScreen extends Screen {
 		// Frame 与 selected seam 由同一几何入口计算并绘制。
 		WardrobeGuiPainter.frameWithSelectedCapeTab(graphics::fill, layout);
 		WardrobeGuiPainter.capeIcon(graphics::fill, layout.tabIconBounds());
+		WardrobeGuiPainter.previewFrame(graphics::fill, layout);
 		for (int index = 0; index < WardrobeCapeCatalog.PAGE_SIZE; index++) {
 			WardrobeGuiPainter.slot(graphics::fill, layout.entryBounds(index));
 		}
@@ -253,7 +259,7 @@ public final class WardrobeScreen extends Screen {
 	}
 
 	private void extractPlayerPreview(GuiGraphicsExtractor graphics, int mouseY) {
-		var bounds = layout.previewBounds();
+		var bounds = layout.previewModelBounds();
 		if (minecraft == null || minecraft.player == null) {
 			extractPreviewMessage(graphics, bounds, PREVIEW_UNAVAILABLE);
 			return;
@@ -264,7 +270,8 @@ public final class WardrobeScreen extends Screen {
 		}
 		var appearance = previewAppearance();
 		if (!previewRenderer.extract(graphics, bounds, layout.previewEntitySize(),
-				PLAYER_PREVIEW_OFFSET_Y, mouseY, previewRotation.yawDegrees(), minecraft.player, appearance)) {
+				PLAYER_PREVIEW_OFFSET_Y, mouseY, previewRotation.yawDegrees(), minecraft.player, appearance,
+				previewMode)) {
 			extractPreviewMessage(graphics, bounds, PREVIEW_UNAVAILABLE);
 		}
 	}
@@ -272,16 +279,17 @@ public final class WardrobeScreen extends Screen {
 	private void extractPreviewMessage(GuiGraphicsExtractor graphics, WardrobeLayout.Bounds bounds, String message) {
 		String fitted = WardrobeStatusText.fit(message, bounds.width(), font::width);
 		graphics.text(font, fitted, bounds.centerX() - font.width(fitted) / 2,
-				bounds.centerY() - font.lineHeight / 2, WardrobeGuiPainter.TEXT_COLOR, false);
+				bounds.centerY() - font.lineHeight / 2, WardrobeGuiPainter.PREVIEW_TEXT_COLOR, false);
 	}
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (layout != null && layout.fitsScreen() && previewRotation.beginDrag(
-				event.x(), event.y(), event.button(), layout.previewBounds())) {
+		// Widget 先处理命中；旋转区还在几何上排除预览模式按钮和边框。
+		if (super.mouseClicked(event, doubleClick)) {
 			return true;
 		}
-		return super.mouseClicked(event, doubleClick);
+		return layout != null && layout.fitsScreen() && previewRotation.beginDrag(
+				event.x(), event.y(), event.button(), layout.previewDragBounds());
 	}
 
 	@Override

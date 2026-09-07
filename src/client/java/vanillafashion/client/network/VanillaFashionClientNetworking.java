@@ -48,14 +48,11 @@ public final class VanillaFashionClientNetworking {
 					if (handler == null) {
 						return;
 					}
-					boolean close = ClientCapeSelectionResults.apply(handler.getConnection(),
+					ClientCapeSelectionResults.apply(handler.getConnection(),
 							context.player().getUUID(), payload, playerFashions, selectionRequests,
 							() -> context.client().gui.screen() instanceof WardrobeScreen wardrobe
 									? wardrobe.selectionSession() : null,
 							id -> capeRegistry.find(id).isPresent());
-					if (close && context.client().gui.screen() instanceof WardrobeScreen wardrobe) {
-						wardrobe.onClose();
-					}
 				});
 		// 当前 Fabric 接收器在客户端线程执行；这里只修改连接 Registry，不触碰 Renderer。
 		boolean fashionSnapshotRegistered = registerCurrentConnectionReceiver(

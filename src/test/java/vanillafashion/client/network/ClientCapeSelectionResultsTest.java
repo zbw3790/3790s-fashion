@@ -106,6 +106,8 @@ class ClientCapeSelectionResultsTest {
 		assertEquals(dirtyNewScreen ? Optional.empty() : SECOND, secondScreen.draft());
 		assertFalse(secondScreen.closed());
 		assertEquals(0, secondScreen.pendingRequestId());
+		assertTrue(secondScreen.canEdit());
+		assertEquals(dirtyNewScreen, secondScreen.canFinish(true, false, cape -> true));
 		assertFalse(tracker.hasOutstanding());
 		assertEquals(18, tracker.allocate().orElseThrow());
 	}
@@ -123,11 +125,122 @@ class ClientCapeSelectionResultsTest {
 			screen.observe(registry.selfAuthority(SELF), registry.state());
 		}
 		assertEquals(accepted, apply(result, screen));
-		if (!updateFirst) { registry.update(update); }
+		if (!updateFirst) {
+			registry.update(update);
+			screen.observe(registry.selfAuthority(SELF), registry.state());
+		}
 		assertEquals(choice, registry.find(SELF).orElseThrow().effectiveSelection());
 		assertEquals(choice, registry.selfAuthority(SELF).orElseThrow().effectiveSelection());
-		assertEquals(accepted, screen.closed());
+		assertFalse(screen.closed());
+		assertTrue(screen.canEdit());
+		assertEquals(choice, screen.baseline());
+		assertEquals(SECOND, screen.draft());
+		assertEquals(!accepted, screen.dirty());
+		assertEquals(!accepted, screen.canFinish(true, false, cape -> true));
+		assertEquals(0, screen.pendingRequestId());
 		assertFalse(tracker.hasOutstanding());
+	}
+
+	@ParameterizedTest @ValueSource(booleans = {false, true})
+	void sameSessionAcceptsConsecutiveSelectionsInBothMessageOrders(boolean updateFirst) {
+		var session = screen();
+		long previousRequest = 0;
+		for (var choice : List.<Optional<CapeId>>of(SECOND, Optional.empty())) {
+			session.select(choice);
+			assertTrue(session.canFinish(true, tracker.hasOutstanding(), cape -> true));
+			var request = session.finish(tracker, true, cape -> true).request().orElseThrow();
+			assertEquals(previousRequest + 1, request.requestId());
+			assertEquals(choice, request.selection());
+			assertFalse(session.canEdit());
+			var update = new PlayerFashionEntry(SELF, state(choice));
+			if (updateFirst) {
+				registry.update(update);
+				session.observe(registry.selfAuthority(SELF), registry.state());
+			}
+			assertTrue(apply(new CapeSelectionResultPayload(request.requestId(), true,
+					state(choice), CapeSelectionReason.APPLIED), session));
+			if (!updateFirst) {
+				registry.update(update);
+				session.observe(registry.selfAuthority(SELF), registry.state());
+			}
+			assertEquals(state(choice), registry.selfAuthority(SELF).orElseThrow());
+			assertEquals(choice, session.baseline());
+			assertEquals(choice, session.draft());
+			assertEquals(0, session.pendingRequestId());
+			assertTrue(session.lastError().isEmpty());
+			assertFalse(session.closed());
+			assertFalse(session.dirty());
+			assertTrue(session.canEdit());
+			assertFalse(session.canFinish(true, tracker.hasOutstanding(), cape -> true));
+			assertTrue(session.finish(tracker, true, cape -> true).request().isEmpty());
+			assertFalse(tracker.hasOutstanding());
+			previousRequest = request.requestId();
+		}
+		assertEquals(3, tracker.allocate().orElseThrow());
+	}
+
+	@Test
+	void successfulResultThenUpdateDoesNotOverwriteTheNextUnsavedDraft() {
+		var session = screen();
+		long requestId = submit(session);
+		assertTrue(apply(accepted(requestId), session));
+		session.select(Optional.empty());
+		registry.update(new PlayerFashionEntry(SELF, state(SECOND)));
+		session.observe(registry.selfAuthority(SELF), registry.state());
+		assertEquals(SECOND, session.baseline());
+		assertTrue(session.draft().isEmpty());
+		assertTrue(session.dirty());
+		assertFalse(session.closed());
+		assertTrue(session.canFinish(true, tracker.hasOutstanding(), cape -> true));
+		assertEquals(requestId + 1, session.finish(tracker, true, cape -> true).request().orElseThrow().requestId());
+	}
+
+	@Test
+	void rejectedRequestCanBeAdjustedAndAppliedInTheSameSession() {
+		var session = screen();
+		long firstRequest = submit(session);
+		var dormant = PlayerFashionAuthoritativeState.dormant(FIRST.orElseThrow());
+		assertFalse(apply(new CapeSelectionResultPayload(firstRequest, false,
+				dormant, CapeSelectionReason.SERVICE_UNAVAILABLE), session));
+		assertEquals(dormant, registry.selfAuthority(SELF).orElseThrow());
+		assertEquals(FIRST, session.baseline());
+		assertEquals(SECOND, session.draft());
+		assertTrue(session.dormant());
+		assertTrue(session.canEdit());
+		assertEquals(Optional.of(CapeSelectionReason.SERVICE_UNAVAILABLE), session.lastError());
+		assertFalse(tracker.hasOutstanding());
+		session.select(Optional.empty());
+		long secondRequest = session.finish(tracker, true, cape -> true).request().orElseThrow().requestId();
+		assertEquals(firstRequest + 1, secondRequest);
+		assertTrue(apply(new CapeSelectionResultPayload(secondRequest, true,
+				PlayerFashionAuthoritativeState.vanilla(), CapeSelectionReason.APPLIED), session));
+		assertTrue(session.baseline().isEmpty());
+		assertTrue(session.draft().isEmpty());
+		assertTrue(session.lastError().isEmpty());
+		assertEquals(0, session.pendingRequestId());
+		assertFalse(session.dormant());
+		assertFalse(session.closed());
+		assertTrue(session.canEdit());
+		assertFalse(session.canFinish(true, false, cape -> true));
+		assertFalse(tracker.hasOutstanding());
+	}
+
+	@Test
+	void closingAfterAnotherDraftKeepsTheLastSuccessfulSelectionForReopen() {
+		var session = screen();
+		long requestId = submit(session);
+		assertTrue(apply(accepted(requestId), session));
+		session.select(Optional.empty());
+		assertTrue(session.dirty());
+		session.cancel();
+		var reopened = screen();
+		assertEquals(SECOND, registry.selfAuthority(SELF).orElseThrow().storedSelection());
+		assertEquals(SECOND, reopened.baseline());
+		assertEquals(SECOND, reopened.draft());
+		assertFalse(reopened.closed());
+		assertFalse(reopened.dirty());
+		assertFalse(tracker.hasOutstanding());
+		assertEquals(requestId + 1, tracker.allocate().orElseThrow());
 	}
 
 	@ParameterizedTest @ValueSource(booleans = {false, true})
@@ -141,6 +254,9 @@ class ClientCapeSelectionResultsTest {
 		assertEquals(choice, registry.selfAuthority(SELF).orElseThrow().effectiveSelection());
 		assertEquals(ClientPlayerFashionRegistry.State.UNAVAILABLE, registry.state());
 		assertEquals(0, registry.size());
+		assertFalse(screen.closed());
+		assertEquals(0, screen.pendingRequestId());
+		assertFalse(screen.canFinish(true, false, cape -> true));
 		assertTrue(registry.find(SELF).isEmpty());
 		assertTrue(registry.find(REMOTE).isEmpty());
 		var reopened = screen();
@@ -171,12 +287,14 @@ class ClientCapeSelectionResultsTest {
 	@Test void authorityCorrectionAndCompletionPrecedeCurrentScreenLookup() {
 		var screen = screen();
 		long id = submit(screen);
-		boolean closed = ClientCapeSelectionResults.apply(connection, SELF, accepted(id), registry, tracker, () -> {
+		boolean applied = ClientCapeSelectionResults.apply(connection, SELF, accepted(id), registry, tracker, () -> {
 			assertEquals(SECOND, registry.find(SELF).orElseThrow().effectiveSelection());
 			assertFalse(tracker.hasOutstanding());
 			return screen;
 		}, cape -> true);
-		assertTrue(closed);
+		assertTrue(applied);
+		assertFalse(screen.closed());
+		assertTrue(screen.canEdit());
 	}
 
 	@Test void oldConnectionCannotCorrectNewRegistryOrCompleteReusedId() {

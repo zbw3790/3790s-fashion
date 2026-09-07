@@ -132,6 +132,46 @@ class WardrobeStatusTextTest {
 	}
 
 	@Test
+	void successfulAcknowledgementClearsPendingTextWithoutClosingTheSession() {
+		var selection = session(PlayerFashionAuthoritativeState.vanilla());
+		selection.select(Optional.of(FIRST));
+		var tracker = tracker();
+		long requestId = selection.finish(tracker, true, id -> true).request().orElseThrow().requestId();
+		for (int tick = 0; tick < 200; tick++) {
+			selection.tick();
+		}
+		tracker.complete(requestId);
+		assertTrue(selection.acceptResult(new CapeSelectionResultPayload(requestId, true,
+				PlayerFashionAuthoritativeState.active(FIRST), CapeSelectionReason.APPLIED), AVAILABLE, id -> true));
+		var text = text(selection, CapeWardrobeContent.State.READY);
+		assertEquals(WardrobeStatusText.Priority.NORMAL, text.priority());
+		assertEquals("当前选择：first", text.firstLine());
+		assertEquals("", text.secondLine());
+		assertFalse(selection.closed());
+		assertFalse(selection.canFinish(true, false, id -> true));
+		assertTrue(selection.canEdit());
+	}
+
+	@Test
+	void successfulAcknowledgementNeverHidesTheReturnedDormantState() {
+		var selection = session(PlayerFashionAuthoritativeState.vanilla());
+		selection.select(Optional.of(FIRST));
+		var tracker = tracker();
+		long requestId = selection.finish(tracker, true, id -> true).request().orElseThrow().requestId();
+		tracker.complete(requestId);
+		assertTrue(selection.acceptResult(new CapeSelectionResultPayload(requestId, true,
+				PlayerFashionAuthoritativeState.dormant(FIRST), CapeSelectionReason.APPLIED), AVAILABLE, id -> false));
+		var text = text(selection, CapeWardrobeContent.State.EMPTY);
+		assertEquals(WardrobeStatusText.Priority.DORMANT, text.priority());
+		assertEquals("已保存选择：first", text.firstLine());
+		assertEquals("该披风当前不可用，暂时使用原版外观", text.secondLine());
+		assertEquals(Optional.of(FIRST), selection.baseline());
+		assertEquals(Optional.of(FIRST), selection.draft());
+		assertTrue(selection.previewSelection().isEmpty());
+		assertFalse(selection.closed());
+	}
+
+	@Test
 	void contentErrorIsVisibleBeforePendingAndKeepsPendingInTheTooltip() {
 		var selection = session(PlayerFashionAuthoritativeState.vanilla());
 		selection.select(Optional.of(FIRST));
@@ -230,6 +270,7 @@ class WardrobeStatusTextTest {
 		var selection = new WardrobeSelectionSession();
 		selection.observe(Optional.of(PlayerFashionAuthoritativeState.vanilla()),
 				ClientPlayerFashionRegistry.State.UNINITIALIZED);
+		selection.select(Optional.of(FIRST));
 		var text = WardrobeStatusText.create(selection, ClientPlayerFashionRegistry.State.UNINITIALIZED,
 				true, false, id -> true, CapeWardrobeContent.State.READY, "");
 		assertEquals(WardrobeStatusText.Priority.LOADING, text.priority());

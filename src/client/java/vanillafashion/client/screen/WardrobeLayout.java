@@ -18,6 +18,10 @@ final class WardrobeLayout {
 	static final int PAGE_BUTTON_HEIGHT = 17;
 	static final int APPLY_BUTTON_WIDTH = 56;
 	static final int APPLY_BUTTON_HEIGHT = 20;
+	static final int PREVIEW_BORDER_WIDTH = 1;
+	static final int PREVIEW_CONTENT_MARGIN = 2;
+	static final int PREVIEW_MODE_BUTTON_SIZE = 18;
+	static final int PREVIEW_MODE_BUTTON_GAP = 2;
 	static final int OUTER_MARGIN = 8;
 	static final int TOTAL_HEIGHT = FRAME_HEIGHT + TAB_HEIGHT - TAB_OVERLAP;
 
@@ -58,6 +62,33 @@ final class WardrobeLayout {
 	Bounds tabIconBounds() { return relative(8, -19, ICON_SIZE, ICON_SIZE); }
 	Bounds tabJoinBounds() { return relative(0, 0, TAB_WIDTH, TAB_OVERLAP); }
 	Bounds previewBounds() { return relative(8, 18, frameBounds.width() - 114, 102); }
+	Bounds previewInnerBounds() {
+		Bounds outer = previewBounds();
+		return new Bounds(outer.x() + PREVIEW_BORDER_WIDTH, outer.y() + PREVIEW_BORDER_WIDTH,
+				outer.width() - PREVIEW_BORDER_WIDTH * 2, outer.height() - PREVIEW_BORDER_WIDTH * 2);
+	}
+	Bounds previewModelBounds() {
+		Bounds outer = previewBounds();
+		// 模型围绕完整预览框居中；按钮仅占右上角，不再下移模型中心。
+		return new Bounds(outer.x() + PREVIEW_CONTENT_MARGIN, outer.y() + PREVIEW_CONTENT_MARGIN,
+				outer.width() - PREVIEW_CONTENT_MARGIN * 2, outer.height() - PREVIEW_CONTENT_MARGIN * 2);
+	}
+	Bounds previewDragBounds() {
+		Bounds outer = previewBounds();
+		int top = PREVIEW_CONTENT_MARGIN + PREVIEW_MODE_BUTTON_SIZE + PREVIEW_MODE_BUTTON_GAP;
+		return new Bounds(outer.x() + PREVIEW_CONTENT_MARGIN, outer.y() + top,
+				outer.width() - PREVIEW_CONTENT_MARGIN * 2, outer.height() - top - PREVIEW_CONTENT_MARGIN);
+	}
+	Bounds previewModeButtonBounds() {
+		Bounds outer = previewBounds();
+		return new Bounds(outer.right() - PREVIEW_CONTENT_MARGIN - PREVIEW_MODE_BUTTON_SIZE,
+				outer.y() + PREVIEW_CONTENT_MARGIN, PREVIEW_MODE_BUTTON_SIZE, PREVIEW_MODE_BUTTON_SIZE);
+	}
+	Bounds previewModeIconBounds() {
+		Bounds button = previewModeButtonBounds();
+		return new Bounds(button.x() + (button.width() - ICON_SIZE) / 2,
+				button.y() + (button.height() - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE);
+	}
 	Bounds gridBounds() { return relative(frameBounds.width() - 96, 18, 88, 102); }
 	Bounds paginationBounds() { return relative(frameBounds.width() - 96, 122, 88, 17); }
 	Bounds previousPageButtonBounds() { return relative(frameBounds.width() - 96, 122, 12, 17); }
@@ -70,7 +101,7 @@ final class WardrobeLayout {
 	int pageLabelY() { return frameBounds.y() + 126; }
 	int selectionLabelY() { return frameBounds.y() + 144; }
 	int statusLabelY() { return frameBounds.y() + 154; }
-	int previewEntitySize() { return mode == Mode.STANDARD ? 40 : 34; }
+	int previewEntitySize() { return mode == Mode.STANDARD ? 34 : 32; }
 
 	Bounds entryBounds(int pageEntryIndex) {
 		if (pageEntryIndex < 0 || pageEntryIndex >= WardrobeCapeCatalog.PAGE_SIZE) {
