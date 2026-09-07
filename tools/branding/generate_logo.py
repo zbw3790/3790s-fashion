@@ -1,308 +1,180 @@
-"""以纯 Python 确定性绘制项目 Logo。"""
+"""校验当前正式 Logo；使用显式本地资源可完整再生已冻结的数字盔甲架图像。"""
 
 from __future__ import annotations
 
 import argparse
-import binascii
 import hashlib
+import io
+import json
 import struct
-import zlib
+import sys
+from collections import deque
 from pathlib import Path
+from zipfile import ZipFile
+
+ROOT = Path(__file__).resolve().parents[2]
+APPROVED = {
+    "logo.png": (512, 2695, "6301eebeda43cc47623cd3886fb47b21f77cf2abab3a3e2a36970b279618c6ce"),
+    "logo-256.png": (256, 1447, "31bc223b080557920154886092d16e26b35927fff914d5692aa82822c1e17eed"),
+    "logo-128.png": (128, 887, "52efa02194417c62039ae011db3afabf867a52bb8ec64a9a03ff9404baa5e8d6"),
+}
+CLIENT_SHA256 = "40896ee9f1e2bec3c934daac7e93d41e9e3d9c2f8ae0ca366d52ffbfd1afa290"
+RESOURCE_HASHES = {
+    "assets/minecraft/textures/item/armor_stand.png": "54d95c69cf2bb9e566c6a013c8258bd44e998de5d0578fc79acb8d16b38b1c8a",
+    "assets/minecraft/textures/font/ascii.png": "e8646f1ed1f4bfd597d262cca3d8fac88ceaaa62807bbd5e607b2e3fe41c928a",
+    "assets/minecraft/font/default.json": "32942032bb9cc9a482088dcbd617a9ce339fb9b722e9696c6cac13bac5949832",
+    "assets/minecraft/font/include/default.json": "e17f8a4289db15bf662df3ab623ad4dd9bda9d2b2e3e9e9e743234ff186bd0c4",
+    "assets/minecraft/items/armor_stand.json": "e82ff3ff89b4aa96eacf20dbec0932c17861edde073ffd064053aff3c7b104e9",
+    "assets/minecraft/models/item/armor_stand.json": "5e5136e656cca28b3be7233f36b636b562757e52efe70c0dd0bcf11a6f8c3a6f",
+}
+POSITIONS = {"3": (8, 14), "7": (90, 14), "9": (8, 72), "0": (90, 72)}
+BACKGROUND = (38, 41, 43, 255)
+DIGIT_COLOR = (54, 58, 61, 255)
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT_DIRECTORY = PROJECT_ROOT / "branding"
-DEFAULT_ICON_PATH = (
-    PROJECT_ROOT / "src/main/resources/assets/vanilla_fashion/icon.png"
-)
-LOGICAL_SIZE = 64
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
 
 
-class Canvas:
-    """提供只包含硬边缘像素图形的最小 RGBA 画布。"""
-
-    def __init__(self, size: int, color: tuple[int, int, int, int]) -> None:
-        self.size = size
-        self.pixels = bytearray(color * (size * size))
-
-    def pixel(self, x: int, y: int, color: tuple[int, int, int, int]) -> None:
-        if 0 <= x < self.size and 0 <= y < self.size:
-            offset = (y * self.size + x) * 4
-            self.pixels[offset : offset + 4] = bytes(color)
-
-    def rectangle(
-        self,
-        x0: int,
-        y0: int,
-        x1: int,
-        y1: int,
-        color: tuple[int, int, int, int],
-    ) -> None:
-        for y in range(max(0, y0), min(self.size, y1)):
-            for x in range(max(0, x0), min(self.size, x1)):
-                self.pixel(x, y, color)
-
-    def polygon(
-        self,
-        points: tuple[tuple[int, int], ...],
-        color: tuple[int, int, int, int],
-    ) -> None:
-        min_x = max(0, min(x for x, _ in points))
-        max_x = min(self.size - 1, max(x for x, _ in points))
-        min_y = max(0, min(y for _, y in points))
-        max_y = min(self.size - 1, max(y for _, y in points))
-        for y in range(min_y, max_y + 1):
-            for x in range(min_x, max_x + 1):
-                if point_in_polygon(x + 0.5, y + 0.5, points):
-                    self.pixel(x, y, color)
-
-    def line(
-        self,
-        x0: int,
-        y0: int,
-        x1: int,
-        y1: int,
-        color: tuple[int, int, int, int],
-        thickness: int = 1,
-    ) -> None:
-        dx = abs(x1 - x0)
-        sx = 1 if x0 < x1 else -1
-        dy = -abs(y1 - y0)
-        sy = 1 if y0 < y1 else -1
-        error = dx + dy
-        while True:
-            radius = thickness // 2
-            self.rectangle(
-                x0 - radius,
-                y0 - radius,
-                x0 - radius + thickness,
-                y0 - radius + thickness,
-                color,
-            )
-            if x0 == x1 and y0 == y1:
-                break
-            doubled = 2 * error
-            if doubled >= dy:
-                error += dy
-                x0 += sx
-            if doubled <= dx:
-                error += dx
-                y0 += sy
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def point_in_polygon(
-    x: float,
-    y: float,
-    points: tuple[tuple[int, int], ...],
-) -> bool:
-    inside = False
-    previous_x, previous_y = points[-1]
-    for current_x, current_y in points:
-        crosses = (current_y > y) != (previous_y > y)
-        if crosses:
-            boundary = (
-                (previous_x - current_x) * (y - current_y)
-                / (previous_y - current_y)
-                + current_x
-            )
-            if x < boundary:
-                inside = not inside
-        previous_x, previous_y = current_x, current_y
-    return inside
+def validate_png(name: str, data: bytes) -> None:
+    size, length, expected = APPROVED[name]
+    require(len(data) == length and digest(data) == expected,
+            f"{name} 与当前批准 PNG 的大小或 SHA-256 不一致。")
+    require(data[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", data[16:24]) == (size, size),
+            f"{name} 的 PNG 尺寸不正确。")
 
 
-def draw_logo() -> bytes:
-    """绘制打开的木质衣柜与中央空盔甲架。"""
-    transparent = (0, 0, 0, 0)
-    background = (25, 30, 43, 255)
-    background_light = (35, 42, 56, 255)
-    outline = (45, 27, 24, 255)
-    darkest_wood = (72, 39, 27, 255)
-    dark_wood = (102, 57, 36, 255)
-    wood = (143, 83, 48, 255)
-    light_wood = (187, 119, 67, 255)
-    inner_shadow = (18, 20, 28, 255)
-    inner_light = (31, 34, 43, 255)
-    stand_dark = (111, 80, 47, 255)
-    stand_wood = (176, 135, 78, 255)
-    stand_light = (213, 173, 103, 255)
-    stone_dark = (75, 79, 82, 255)
-    stone = (124, 128, 127, 255)
-    metal = (218, 168, 70, 255)
-    blue_fabric = (55, 108, 170, 255)
-    rose_fabric = (163, 67, 83, 255)
-
-    canvas = Canvas(LOGICAL_SIZE, transparent)
-    canvas.rectangle(3, 3, 61, 61, background)
-    canvas.rectangle(5, 5, 59, 58, background_light)
-    canvas.rectangle(5, 52, 59, 59, background)
-    canvas.rectangle(3, 3, 8, 8, transparent)
-    canvas.rectangle(56, 3, 61, 8, transparent)
-    canvas.rectangle(3, 56, 8, 61, transparent)
-    canvas.rectangle(56, 56, 61, 61, transparent)
-
-    # 柜体和暗色内部。
-    canvas.rectangle(10, 5, 54, 59, outline)
-    canvas.rectangle(12, 7, 52, 57, dark_wood)
-    canvas.rectangle(16, 11, 48, 53, inner_shadow)
-    canvas.rectangle(18, 13, 46, 51, inner_light)
-    canvas.rectangle(20, 15, 44, 49, inner_shadow)
-    canvas.rectangle(9, 5, 55, 10, darkest_wood)
-    canvas.rectangle(11, 6, 53, 8, wood)
-    canvas.rectangle(13, 7, 51, 8, light_wood)
-    canvas.rectangle(9, 52, 55, 59, darkest_wood)
-    canvas.rectangle(12, 53, 52, 57, wood)
-    canvas.rectangle(14, 53, 50, 54, light_wood)
-    canvas.rectangle(12, 59, 18, 61, outline)
-    canvas.rectangle(46, 59, 52, 61, outline)
-
-    # 打开的柜门采用像素化梯形，不使用任何外部纹理。
-    canvas.polygon(((2, 10), (15, 13), (15, 54), (2, 58)), outline)
-    canvas.polygon(((4, 12), (13, 15), (13, 52), (4, 55)), dark_wood)
-    canvas.polygon(((5, 14), (11, 16), (11, 50), (5, 53)), wood)
-    canvas.line(6, 17, 10, 18, light_wood)
-    canvas.line(6, 48, 10, 47, darkest_wood)
-    canvas.rectangle(7, 23, 10, 32, blue_fabric)
-    canvas.rectangle(7, 23, 9, 25, (82, 142, 205, 255))
-
-    canvas.polygon(((49, 13), (62, 10), (62, 58), (49, 54)), outline)
-    canvas.polygon(((51, 15), (60, 12), (60, 55), (51, 52)), dark_wood)
-    canvas.polygon(((53, 16), (59, 14), (59, 53), (53, 50)), wood)
-    canvas.line(54, 18, 58, 17, light_wood)
-    canvas.line(54, 47, 58, 48, darkest_wood)
-    canvas.rectangle(54, 23, 57, 32, rose_fabric)
-    canvas.rectangle(55, 23, 57, 25, (196, 91, 105, 255))
-    canvas.rectangle(11, 32, 14, 35, metal)
-    canvas.rectangle(50, 32, 53, 35, metal)
-
-    # 中央盔甲架保持完全空置：只有木架、支腿与石质底座。
-    canvas.rectangle(29, 16, 35, 22, stand_dark)
-    canvas.rectangle(30, 16, 34, 20, stand_wood)
-    canvas.rectangle(31, 16, 33, 18, stand_light)
-    canvas.rectangle(31, 21, 33, 28, stand_wood)
-    canvas.line(22, 28, 42, 28, stand_dark, 3)
-    canvas.line(23, 27, 41, 27, stand_wood, 2)
-    canvas.rectangle(31, 28, 33, 43, stand_wood)
-    canvas.line(31, 33, 26, 41, stand_dark, 2)
-    canvas.line(33, 33, 38, 41, stand_dark, 2)
-    canvas.line(31, 42, 28, 49, stand_wood, 2)
-    canvas.line(33, 42, 36, 49, stand_wood, 2)
-    canvas.rectangle(23, 49, 41, 53, stone_dark)
-    canvas.rectangle(25, 48, 39, 51, stone)
-    canvas.rectangle(27, 48, 37, 49, (165, 168, 163, 255))
-
-    # 少量方块高光让小尺寸下仍能分离衣柜、内腔与盔甲架。
-    canvas.rectangle(18, 13, 20, 16, (46, 49, 57, 255))
-    canvas.rectangle(44, 13, 46, 16, (12, 14, 21, 255))
-    canvas.rectangle(6, 56, 58, 58, (14, 17, 25, 255))
-    canvas.rectangle(24, 55, 40, 56, (55, 58, 63, 255))
-    return bytes(canvas.pixels)
+def check_current(directory: Path, icon: Path | None = None) -> None:
+    """只校验已存在的 PNG；不读取游戏资源，不声称已经重新生成。"""
+    for name in APPROVED:
+        validate_png(name, (directory / name).read_bytes())
+    if icon is not None:
+        require(icon.read_bytes() == (directory / "logo-128.png").read_bytes(),
+                "metadata icon 与当前 128 像素 Logo 不一致。")
 
 
-def scale_nearest(pixels: bytes, source_size: int, target_size: int) -> bytes:
-    if target_size % source_size != 0:
-        raise ValueError("目标尺寸必须是逻辑画布尺寸的整数倍。")
-    scale = target_size // source_size
-    output = bytearray(target_size * target_size * 4)
-    for source_y in range(source_size):
-        for source_x in range(source_size):
-            source_offset = (source_y * source_size + source_x) * 4
-            color = pixels[source_offset : source_offset + 4]
-            for offset_y in range(scale):
-                target_y = source_y * scale + offset_y
-                row_offset = target_y * target_size * 4
-                for offset_x in range(scale):
-                    target_x = source_x * scale + offset_x
-                    target_offset = row_offset + target_x * 4
-                    output[target_offset : target_offset + 4] = color
-    return bytes(output)
+def load_resources(client_jar: Path) -> dict[str, bytes]:
+    require(client_jar.is_file(), "找不到显式指定的本地 Minecraft 26.2 客户端 JAR。")
+    data = client_jar.read_bytes()
+    require(digest(data) == CLIENT_SHA256, "客户端 JAR 与冻结的 Minecraft 26.2 官方来源不一致。")
+    with ZipFile(io.BytesIO(data)) as archive:
+        require(json.loads(archive.read("version.json"))["id"] == "26.2", "Minecraft 版本不符。")
+        resources = {entry: archive.read(entry) for entry in RESOURCE_HASHES}
+    for entry, expected in RESOURCE_HASHES.items():
+        require(digest(resources[entry]) == expected, f"原版资源摘要不符：{entry}")
+    return resources
 
 
-def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
-    checksum = binascii.crc32(chunk_type)
-    checksum = binascii.crc32(data, checksum) & 0xFFFFFFFF
-    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", checksum)
+def regenerate(client_jar: Path) -> dict[str, bytes]:
+    """从物品 PNG 和默认字体字形完整再生，不嵌入或下载原始资产。"""
+    resources = load_resources(client_jar)
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError as error:
+        raise ValueError("完整再生需要 Pillow；冻结图像使用 Pillow 10.3.0。普通校验不需要 Pillow。") from error
+    with Image.open(io.BytesIO(resources["assets/minecraft/textures/item/armor_stand.png"])) as png:
+        source = png.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    require(source.size == (16, 16) and bbox == (3, 0, 12, 16), "盔甲架主体尺寸与冻结来源不一致。")
+    crop = source.crop(bbox)
+    base = Image.new("RGBA", (11, 18), (0, 0, 0, 0))
+    occupied = {(x+1, y+1) for y in range(16) for x in range(9) if crop.getpixel((x,y))[3]}
+    exterior = ({(x,y) for x in range(11) for y in (0,17)}
+                | {(x,y) for x in (0,10) for y in range(18)}) - occupied
+    queue = deque(sorted(exterior))
+    while queue:
+        x, y = queue.popleft()
+        for dx, dy in ((-1,0),(1,0),(0,-1),(0,1)):
+            point = (x+dx, y+dy)
+            if (0 <= point[0] < 11 and 0 <= point[1] < 18
+                    and point not in occupied and point not in exterior):
+                exterior.add(point)
+                queue.append(point)
+    expanded = {(x+dx,y+dy) for x,y in occupied for dx in (-1,0,1) for dy in (-1,0,1)}
+    for point in (expanded - occupied) & exterior:
+        base.putpixel(point, (255,255,255,255))
+    for x, y in occupied:
+        base.putpixel((x,y), crop.getpixel((x-1,y-1)))
+    foreground = Image.new("RGBA", (128,128), (0,0,0,0))
+    foreground.paste(base.resize((66,108), Image.Resampling.NEAREST), (31,10))
 
-
-def encode_png(size: int, pixels: bytes) -> bytes:
-    stride = size * 4
-    raw = b"".join(
-        b"\x00" + pixels[row * stride : (row + 1) * stride]
-        for row in range(size)
-    )
-    header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + png_chunk(b"IHDR", header)
-        + png_chunk(b"IDAT", zlib.compress(raw, level=9))
-        + png_chunk(b"IEND", b"")
-    )
-
-
-def generated_files() -> dict[str, bytes]:
-    logical = draw_logo()
-    return {
-        "logo.png": encode_png(512, scale_nearest(logical, LOGICAL_SIZE, 512)),
-        "logo-128.png": encode_png(128, scale_nearest(logical, LOGICAL_SIZE, 128)),
-    }
-
-
-def describe(path: Path, content: bytes) -> str:
-    return f"{path}：{len(content)} 字节，SHA-256={hashlib.sha256(content).hexdigest()}"
-
-
-def check_file(path: Path, expected: bytes) -> None:
-    if not path.is_file():
-        raise FileNotFoundError(f"生成文件不存在：{path}")
-    actual = path.read_bytes()
-    if actual != expected:
-        raise ValueError(f"生成文件与确定性绘制结果不一致：{path}")
+    default = json.loads(resources["assets/minecraft/font/default.json"])
+    require(any(p.get("id") == "minecraft:include/default" and p.get("filter") == {"uniform": False}
+                for p in default["providers"]), "默认字体引用不符合冻结方案。")
+    providers = json.loads(resources["assets/minecraft/font/include/default.json"])["providers"]
+    with Image.open(io.BytesIO(resources["assets/minecraft/textures/font/ascii.png"])) as png:
+        atlas = png.convert("RGBA")
+    canvas = Image.new("RGBA", (128,128), BACKGROUND)
+    draw = ImageDraw.Draw(canvas)
+    for digit, (left, top) in POSITIONS.items():
+        provider = next(p for p in providers if p["type"] == "bitmap"
+                        and any(digit in row for row in p["chars"]))
+        require(provider["file"] == "minecraft:font/ascii.png", "数字未引用冻结的原版字体贴图。")
+        rows = provider["chars"]
+        width, height = atlas.width // len(rows[0]), atlas.height // len(rows)
+        row = next(i for i, line in enumerate(rows) if digit in line)
+        column = rows[row].index(digit)
+        mask = atlas.crop((column*width,row*height,(column+1)*width,(row+1)*height)).getchannel("A")
+        mask = mask.crop(mask.getbbox())
+        require(mask.size == (5,7) and set(mask.getdata()) == {0,255}, "数字字形尺寸或透明度不符。")
+        for y in range(7):
+            for x in range(5):
+                if mask.getpixel((x,y)):
+                    px, py = left + x*6, top + y*6
+                    draw.rectangle((px,py,px+5,py+5), fill=DIGIT_COLOR)
+    canvas.alpha_composite(foreground)
+    require(all(a == b for a,b in zip(foreground.getdata(),canvas.getdata()) if a[3]),
+            "再生过程中主体像素发生改变。")
+    outputs = {}
+    for name, (size, _, _) in APPROVED.items():
+        image = canvas.resize((size,size), Image.Resampling.NEAREST)
+        clean = Image.frombytes("RGBA", image.size, image.tobytes())
+        buffer = io.BytesIO()
+        clean.save(buffer, format="PNG", compress_level=9, optimize=False)
+        outputs[name] = buffer.getvalue()
+        validate_png(name, outputs[name])
+    return outputs
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="确定性生成 Vanilla Fashion 像素 Logo。")
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        help="Logo 输出目录；省略时写入仓库 branding 目录并同步 metadata icon。",
-    )
-    parser.add_argument(
-        "--icon-output",
-        type=Path,
-        help="可选的 128×128 metadata icon 输出路径。",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="只校验现有文件，不执行写入。",
-    )
+    parser = argparse.ArgumentParser(description="校验正式 Logo；完整再生必须显式指定本地资源。")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--check", action="store_true", help="只校验已有正式 PNG；也是默认行为。")
+    modes.add_argument("--regenerate", action="store_true", help="从显式本地客户端 JAR 完整再生。")
+    parser.add_argument("--client-jar", type=Path, help="完整再生所需的 Minecraft 26.2 原版客户端 JAR。")
+    parser.add_argument("--output-dir", type=Path, help="校验目录，或完整再生时必须指定的新空目录。")
+    parser.add_argument("--icon-output", type=Path, help="校验时额外检查的 metadata icon 路径，不写入。")
     args = parser.parse_args()
-
-    output_directory = (
-        args.output_dir.resolve()
-        if args.output_dir is not None
-        else DEFAULT_OUTPUT_DIRECTORY
-    )
-    icon_path = args.icon_output.resolve() if args.icon_output is not None else None
-    if args.output_dir is None and args.icon_output is None:
-        icon_path = DEFAULT_ICON_PATH
-
-    files = generated_files()
-    targets = {output_directory / name: content for name, content in files.items()}
-    if icon_path is not None:
-        targets[icon_path] = files["logo-128.png"]
-
-    if args.check:
-        for path, content in targets.items():
-            check_file(path, content)
-            print("校验通过：" + describe(path, content))
-        return
-
-    for path, content in targets.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-        print("已生成：" + describe(path, content))
+    if args.regenerate:
+        if args.client_jar is None or args.output_dir is None or args.icon_output is not None:
+            parser.error("完整再生需要 --client-jar 和 --output-dir；不接受 --icon-output。")
+        output = args.output_dir.resolve()
+        require(not output.exists() or (output.is_dir() and not any(output.iterdir())),
+                "完整再生只写入新的空目录，不覆盖正式或历史图像。")
+        images = regenerate(args.client_jar.resolve())
+        output.mkdir(parents=True, exist_ok=True)
+        for name, data in images.items():
+            (output / name).write_bytes(data)
+        print("完整再生通过：三份 PNG 与当前批准的 SHA-256 逐一一致。")
+    else:
+        if args.client_jar is not None:
+            parser.error("--client-jar 仅用于 --regenerate；校验现有图像不需要游戏资源。")
+        directory = args.output_dir.resolve() if args.output_dir else ROOT / "branding"
+        icon = args.icon_output
+        if icon is None and args.output_dir is None:
+            icon = ROOT / "src/main/resources/assets/vanilla_fashion/icon.png"
+        check_current(directory, icon)
+        print("现有 PNG 校验通过：尺寸、冻结 SHA-256 与指定 icon 一致；未执行完整再生。")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, ValueError) as error:
+        print("错误：" + str(error), file=sys.stderr)
+        raise SystemExit(1)

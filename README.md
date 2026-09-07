@@ -6,7 +6,7 @@
 
 ## 安装需求
 
-- 当前候选版本：`0.2.1`（内部发布准备，尚未公开发布）
+- 当前已发布稳定版本：`v0.2.1`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
@@ -80,4 +80,4 @@ python -B tools/package_release.py
 
 ## 许可证
 
-本项目采用 [MIT License](LICENSE)。
+项目代码采用 [MIT License](LICENSE)；Logo 所含第三方素材见 [品牌素材来源说明](branding/NOTICE.md)。
