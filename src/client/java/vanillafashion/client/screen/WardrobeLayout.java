@@ -118,6 +118,36 @@ final class WardrobeLayout {
 		return new Bounds(entry.x() + 1, entry.y() + 1, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
 	}
 
+    Bounds tabBounds(int index) { return relative(index*TAB_PITCH,-28,TAB_WIDTH,TAB_HEIGHT); }
+    Bounds tabIconBounds(int index) { return relative(index*TAB_PITCH+8,-19,ICON_SIZE,ICON_SIZE); }
+    Bounds tabJoinBounds(int index) { return relative(index*TAB_PITCH,0,TAB_WIDTH,TAB_OVERLAP); }
+    Bounds scopeButtonBounds() { return relative(frameBounds.width()-96,18,88,16); }
+    Bounds originalButtonBounds() { return relative(frameBounds.width()-96,36,43,16); }
+    Bounds noneButtonBounds() { return relative(frameBounds.width()-51,36,43,16); }
+    Bounds outfitGridBounds() { return relative(frameBounds.width()-96,52,88,68); }
+    Bounds outfitEntryBounds(int index) {
+        if (index<0 || index>=8) throw new IllegalArgumentException("装束索引超出 4×2 网格。");
+        return relative(frameBounds.width()-96+(index%4)*22,52+(index/4)*34,22,34);
+    }
+    Bounds scopeOptionBounds(int index) {
+        if (index<0 || index>=5) throw new IllegalArgumentException("范围选项索引越界。");
+        return relative(frameBounds.width()-96,36+index*17,88,16);
+    }
+    Bounds detailOptionBounds(int index) {
+        if (index<0 || index>=6) throw new IllegalArgumentException("详细部位索引越界。");
+        return relative(frameBounds.width()-96+(index%2)*45,36+(index/2)*28,43,26);
+    }
+    Bounds reloadButtonBounds() { return relative(8,122,frameBounds.width()-114,17); }
+    Bounds tooltipBounds() { return relative(8,18,frameBounds.width()-16,102); }
+
+    Bounds tooltipPlacement(int anchorX,int anchorY,int textWidth,int textHeight) {
+        Bounds area=tooltipBounds();
+        int w=Math.min(textWidth,area.width()-8),h=Math.min(textHeight,area.height()-8);
+        int x=Math.clamp(anchorX+8,area.x()+4,area.right()-w-4);
+        int y=Math.clamp(anchorY+8,area.y()+4,area.bottom()-h-4);
+        return new Bounds(x,y,Math.max(1,w),Math.max(1,h));
+    }
+
 	private Bounds relative(int x, int y, int width, int height) {
 		return new Bounds(frameBounds.x() + x, frameBounds.y() + y, width, height);
 	}

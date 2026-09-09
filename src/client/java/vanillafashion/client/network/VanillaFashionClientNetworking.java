@@ -41,10 +41,11 @@ public final class VanillaFashionClientNetworking {
 	) {
 		var selectionRequests = new ClientCapeSelectionRequestTracker();
 		ClientPlayConnectionEvents.INIT.register((handler, client) -> selectionRequests.beginConnection(handler.getConnection()));
-		ClientPlayConnectionEvents.INIT.register((handler, client) -> playerFashions.beginConnection(handler));
+		ClientPlayConnectionEvents.INIT.register((handler, client) -> playerFashions.beginConnection(handler, handler.getConnection()));
 		boolean selectionResultRegistered = registerCurrentConnectionReceiver(
 				CapeSelectionResultPayload.TYPE, (payload, context) -> {
 					var handler = context.client().getConnection();
+                    if (playerFashions.route()==vanillafashion.fashion.FashionAuthorityRoute.V2) return;
 					if (handler == null) {
 						return;
 					}
@@ -189,14 +190,14 @@ public final class VanillaFashionClientNetworking {
 			throw new IllegalStateException("Vanilla Fashion 客户端 payload 接收器重复注册。");
 		}
 
-		logger.info("Vanilla Fashion 八种 S2C payload 客户端接收器、Cape 资产请求与正式选择发送链已注册。");
+		logger.info("Vanilla Fashion legacy Cape 接收器与衣柜发送桥接已注册。");
 	}
 
 	static void scheduleConnectionStateClear(Executor clientExecutor, Runnable cleanup) {
 		clientExecutor.execute(cleanup);
 	}
 
-	private static <T extends CustomPacketPayload> boolean registerCurrentConnectionReceiver(
+	static <T extends CustomPacketPayload> boolean registerCurrentConnectionReceiver(
 			CustomPacketPayload.Type<T> type,
 			ClientPlayNetworking.PlayPayloadHandler<T> receiver
 	) {

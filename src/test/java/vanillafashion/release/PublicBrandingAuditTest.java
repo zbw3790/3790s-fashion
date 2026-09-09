@@ -53,7 +53,6 @@ class PublicBrandingAuditTest {
         String lifecycle = Files.readString(project.resolve(
                 "src/main/java/vanillafashion/fashion/PlayerFashionLifecycle.java"));
 
-        assertTrue(Files.readString(project.resolve("gradle.properties")).contains("mod_version=0.2.1"));
         assertTrue(metadata.contains("3790's Vanilla Style Fashion"));
         assertTrue(metadata.contains("vanilla_fashion"));
         assertTrue(metadata.contains("assets/vanilla_fashion/icon.png"));

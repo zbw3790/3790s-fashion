@@ -32,6 +32,11 @@ import vanillafashion.fashion.PlayerFashionSnapshot;
 import vanillafashion.network.CapeSelectionReason;
 import vanillafashion.network.CapeSelectionResultPayload;
 import vanillafashion.network.SetCapeSelectionPayload;
+import vanillafashion.network.SetFullFashionSelectionPayload;
+import vanillafashion.network.FullFashionSelectionResultPayload;
+import vanillafashion.fashion.*;
+import vanillafashion.outfit.*;
+import vanillafashion.client.network.ClientFullFashionSelectionResults;
 
 class WardrobeScreenInteractionTest {
 	private static final UUID SELF = new UUID(0, 1);
@@ -219,9 +224,9 @@ class WardrobeScreenInteractionTest {
 	}
 
 	@Test
-	void onlyCapeTabAndOneFormalActionExist() {
+	void twoTabsAndOneFormalApplyExist() {
 		var screen = new Fixture().open();
-		assertArrayEquals(new WardrobeScreen.SelectedTab[] {WardrobeScreen.SelectedTab.CAPE},
+		assertArrayEquals(new WardrobeScreen.SelectedTab[] {WardrobeScreen.SelectedTab.CAPE,WardrobeScreen.SelectedTab.OUTFIT},
 				WardrobeScreen.SelectedTab.values());
 		var actions = screen.children().stream().filter(Button.class::isInstance)
 				.filter(widget -> !(widget instanceof ImageButton)).map(Button.class::cast).toList();
@@ -467,6 +472,34 @@ class WardrobeScreenInteractionTest {
 		assertTrue(backward);
 	}
 
+    @Test
+    void v2ActualScreenUsesFullApplyKeepsOutfitAndContinuesSameWindow() {
+        var fixture=new Fixture();fixture.v2=true;
+        var outfit=OutfitSelections.original().with(OutfitPart.HEAD,OutfitPartSelection.NONE);
+        fixture.fashions.beginConnection(fixture.connection);
+        fixture.fashions.receiveFullSnapshot(fixture.connection,new FullPlayerFashionSnapshot(true,List.of(new FullPlayerFashionEntry(SELF,fullState(0,FIRST,outfit)))));
+        var screen=fixture.open();var session=screen.selectionSession();
+        screen.capeContent().changePage(true);previewButton(screen).onPress(new KeyEvent(257,0,0));
+        var bounds=screen.layout().previewDragBounds();screen.previewRotation().beginDrag(bounds.centerX(),bounds.centerY(),0,bounds);screen.previewRotation().drag(0,31);screen.previewRotation().endDrag(0);
+        session.select(Optional.of(SECOND));screen.applySelection();assertTrue(fixture.sent.isEmpty());assertEquals(1,fixture.fullSent.size());assertEquals(outfit,fixture.fullSent.getFirst().stored().outfit());assertFalse(applyButton(screen).active);
+        var confirmed=fullState(1,SECOND,outfit);fixture.fashions.receiveFullUpdate(fixture.connection,new FullPlayerFashionEntry(SELF,confirmed));
+        ClientFullFashionSelectionResults.apply(fixture.connection,fixture.connection,SELF,new FullFashionSelectionResultPayload(1,FullFashionSelectionStatus.SUCCESS,Optional.of(confirmed)),fixture.fashions,()->session);
+        screen.resize(200,240);assertSame(session,screen.selectionSession());assertFalse(applyButton(screen).active);assertEquals(1,screen.capeContent().pageIndex());assertEquals(WardrobePreviewMode.ELYTRA,screen.previewMode());assertEquals(211.0F,screen.previewRotation().yawDegrees());assertEquals(0,fixture.closed.get());
+        session.select(Optional.of(FIRST));screen.applySelection();assertEquals(2,fixture.fullSent.size());assertEquals(1,fixture.fullSent.getLast().expectedRevision());assertEquals(outfit,fixture.fullSent.getLast().stored().outfit());
+    }
+    @Test
+    void v2ActualScreenExposesCapeConflictAndCannotSendLegacyFallback() {
+        var fixture=new Fixture();fixture.v2=true;fixture.fashions.beginConnection(fixture.connection);var outfit=OutfitSelections.original();
+        fixture.fashions.receiveFullSnapshot(fixture.connection,new FullPlayerFashionSnapshot(true,List.of(new FullPlayerFashionEntry(SELF,fullState(0,FIRST,outfit)))));
+        var screen=fixture.open();screen.selectionSession().select(Optional.of(SECOND));fixture.fashions.receiveFullUpdate(fixture.connection,new FullPlayerFashionEntry(SELF,fullState(1,SECOND,outfit)));screen.tick();screen.applySelection();
+        assertFalse(applyButton(screen).active);
+        assertTrue(screen.selectionSession().conflict());
+        assertTrue(screen.statusText().secondLine().contains("存在外部修改"),screen.statusText().toString());
+        assertEquals(WardrobeStatusText.Priority.ERROR,screen.statusText().priority());
+        assertTrue(fixture.fullSent.isEmpty());assertTrue(fixture.sent.isEmpty());
+    }
+    private static FullPlayerFashionState fullState(long revision,CapeId cape,OutfitSelections outfit){var stored=new PlayerFashionStoredState(Optional.of(cape),outfit);return new FullPlayerFashionState(stored,new PlayerFashionEffectiveState(stored.cape(),outfit),revision);}
+
 	private static MouseButtonEvent mouse(double x, double y, int button) {
 		return new MouseButtonEvent(x, y, new MouseButtonInfo(button, 0));
 	}
@@ -479,6 +512,7 @@ class WardrobeScreenInteractionTest {
 	private static Button applyButton(WardrobeScreen screen) {
 		return screen.children().stream().filter(Button.class::isInstance)
 				.filter(widget -> !(widget instanceof ImageButton)).map(Button.class::cast)
+                .filter(button -> button.getMessage().getString().equals("应用"))
 				.findFirst().orElseThrow();
 	}
 
@@ -488,6 +522,8 @@ class WardrobeScreenInteractionTest {
 		final ClientCapeRegistry capes = new ClientCapeRegistry();
 		final ClientCapeSelectionRequestTracker requests = new ClientCapeSelectionRequestTracker();
 		final List<SetCapeSelectionPayload> sent = new ArrayList<>();
+        final List<SetFullFashionSelectionPayload> fullSent = new ArrayList<>();
+        boolean v2;
 		final AtomicInteger closed = new AtomicInteger();
 		final AtomicInteger inventoryKey = new AtomicInteger(69);
 		boolean supported = true;
@@ -506,7 +542,7 @@ class WardrobeScreenInteractionTest {
 			var screen = new WardrobeScreen(null, new Font(null), capes, new ClientCapeTextureManager(),
 					fashions, requests, SELF, connection, new WardrobeScreen.Actions(
 							() -> supported, event -> event.key() == inventoryKey.get(), sent::add,
-							closed::incrementAndGet));
+							closed::incrementAndGet, () -> supported && v2, fullSent::add));
 			screen.width = 320;
 			screen.height = 240;
 			screen.init();

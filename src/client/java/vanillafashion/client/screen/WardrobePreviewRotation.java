@@ -1,6 +1,7 @@
 package vanillafashion.client.screen;
 
 final class WardrobePreviewRotation {
+	static final float FRONT_FACING_YAW_DEGREES = 0.0F;
 	static final float BACK_FACING_YAW_DEGREES = 180.0F;
 	static final float ROTATION_DEGREES_PER_PIXEL = 1.0F;
 	static final int PRIMARY_MOUSE_BUTTON = 0;
@@ -43,6 +44,14 @@ final class WardrobePreviewRotation {
 	float yawDegrees() {
 		return yawDegrees;
 	}
+
+    /** 由视图事件设定朝向；后续拖动继续累积，不在渲染或控件重建时调用。 */
+    void orientTo(float degrees) {
+        if (!Float.isFinite(degrees)) {
+            throw new IllegalArgumentException("衣柜预览朝向必须为有限值。");
+        }
+        yawDegrees = wrapToFullTurn(degrees);
+    }
 
 	boolean isDragging() {
 		return dragging;

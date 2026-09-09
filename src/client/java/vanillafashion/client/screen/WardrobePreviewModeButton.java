@@ -13,6 +13,8 @@ import net.minecraft.network.chat.Component;
 final class WardrobePreviewModeButton extends AbstractButton {
 	private final Supplier<WardrobePreviewMode> mode;
 	private final Runnable toggle;
+    private boolean screenTooltip;
+    void useScreenTooltip() { screenTooltip=true;setTooltip(null); }
 
 	WardrobePreviewModeButton(WardrobeLayout.Bounds bounds, Supplier<WardrobePreviewMode> mode,
 			Runnable toggle) {
@@ -34,7 +36,7 @@ final class WardrobePreviewModeButton extends AbstractButton {
 		Component description = Component.literal(mode.get() == WardrobePreviewMode.CAPE
 				? "当前预览：披风；点击查看鞘翅" : "当前预览：鞘翅；点击查看披风");
 		setMessage(description);
-		setTooltip(Tooltip.create(description));
+		if (!screenTooltip) setTooltip(Tooltip.create(description));
 	}
 
 	@Override

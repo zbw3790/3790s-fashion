@@ -68,7 +68,34 @@ final class WardrobeGuiPainter {
 		selectedCapeTab(sink, layout.tabBounds(), layout.tabJoinBounds());
 	}
 
+    static void frameWithTabs(RectangleSink sink, WardrobeLayout layout, int selected) {
+        var frame = layout.frameBounds();
+        var inactive = layout.tabBounds(1 - selected);
+        // 未选中页签的下阴影在主框上方结束，下黑边与主框顶边共用一行。
+        tabBody(sink, inactive, frame.y());
+        rect(sink, inactive.x() + 3, frame.y() - 2, inactive.width() - 4, 2, SHADOW_COLOR);
+        frame(sink, frame, true);
+        selectedTab(sink, layout.tabBounds(selected), layout.tabJoinBounds(selected), selected == 0);
+        capeIcon(sink, layout.tabIconBounds(0));
+        outfitIcon(sink, layout.tabIconBounds(1));
+    }
+
+    private static final String[] OUTFIT_ICON = {
+            "................", "................", "....111..111....", "...1221111221...",
+            "..122222222221..", "..134444444431..", "..134444444431..", "..111444444111..",
+            "....13444431....", "....13444431....", "....13444431....", "....13444431....",
+            "....13333331....", "....11111111....", "................", "................"
+    };
+
+    static void outfitIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
+        icon(sink, bounds, OUTFIT_ICON);
+    }
+
 	private static void frame(RectangleSink sink, WardrobeLayout.Bounds bounds) {
+        frame(sink, bounds, false);
+    }
+
+    private static void frame(RectangleSink sink, WardrobeLayout.Bounds bounds, boolean attachedLeftTab) {
 		int x = bounds.x(), y = bounds.y(), w = bounds.width(), h = bounds.height();
 		// 先填十字主体，保留四角透明阶梯，不能用透明色覆盖已提交的矩形。
 		rect(sink, x + 4, y, w - 8, h, FRAME_COLOR);
@@ -81,29 +108,50 @@ final class WardrobeGuiPainter {
 		rect(sink, x + 1, y + 4, 2, h - 8, HIGHLIGHT_COLOR);
 		rect(sink, x + w - 3, y + 4, 2, h - 8, SHADOW_COLOR);
 		rect(sink, x + 4, y + h - 3, w - 8, 2, SHADOW_COLOR);
-		paintRows(sink, x, y, CORNERS[0]);
+		// 左侧已有页签轮廓时，这是共享直边，不再叠加独立主框的透明圆角。
+        paintRows(sink, x, y, attachedLeftTab ? new String[]{"KKKK", "KWWW", "KWWW", "KWWG"} : CORNERS[0]);
 		paintRows(sink, x + w - 4, y, CORNERS[1]);
 		paintRows(sink, x, y + h - 4, CORNERS[2]);
 		paintRows(sink, x + w - 4, y + h - 4, CORNERS[3]);
 	}
 
-	private static void selectedCapeTab(RectangleSink sink, WardrobeLayout.Bounds tab,
-			WardrobeLayout.Bounds join) {
-		int x = tab.x(), y = tab.y(), w = tab.width();
-		rect(sink, x + 4, y, w - 8, tab.height(), FRAME_COLOR);
-		rect(sink, x, y + 4, w, tab.height() - 4, FRAME_COLOR);
-		rect(sink, x + 4, y, w - 8, 1, OUTLINE_COLOR);
-		rect(sink, x + 4, y + 1, w - 8, 2, HIGHLIGHT_COLOR);
-		rect(sink, x, y + 4, 1, tab.height() - 4, OUTLINE_COLOR);
-		rect(sink, x + 1, y + 4, 2, tab.height() - 4, HIGHLIGHT_COLOR);
-		rect(sink, x + w - 1, y + 4, 1, join.y() - y - 3, OUTLINE_COLOR);
-		rect(sink, x + w - 3, y + 4, 2, join.y() - y - 2, SHADOW_COLOR);
-		paintRows(sink, x, y, CORNERS[0]);
-		paintRows(sink, x + w - 4, y, CORNERS[1]);
-		rect(sink, x + w - 1, join.y() + 1, 1, 1, HIGHLIGHT_COLOR);
-		rect(sink, x + w - 3, join.y() + 2, 1, 1, SHADOW_COLOR);
-		rect(sink, x + w - 2, join.y() + 2, 2, 1, HIGHLIGHT_COLOR);
-	}
+    private static void selectedCapeTab(RectangleSink sink, WardrobeLayout.Bounds tab,
+            WardrobeLayout.Bounds join) {
+        selectedTab(sink, tab, join, true);
+    }
+
+    private static void tabBody(RectangleSink sink, WardrobeLayout.Bounds tab, int bottom) {
+        int x = tab.x(), y = tab.y(), w = tab.width();
+        rect(sink, x + 4, y, w - 8, bottom - y, FRAME_COLOR);
+        rect(sink, x, y + 4, w, bottom - y - 4, FRAME_COLOR);
+        rect(sink, x + 4, y, w - 8, 1, OUTLINE_COLOR);
+        rect(sink, x + 4, y + 1, w - 8, 2, HIGHLIGHT_COLOR);
+        rect(sink, x, y + 4, 1, bottom - y - 4, OUTLINE_COLOR);
+        rect(sink, x + 1, y + 4, 2, bottom - y - 4, HIGHLIGHT_COLOR);
+        rect(sink, x + w - 1, y + 4, 1, bottom - y - 4, OUTLINE_COLOR);
+        rect(sink, x + w - 3, y + 4, 2, bottom - y - 4, SHADOW_COLOR);
+        paintRows(sink, x, y, CORNERS[0]);
+        paintRows(sink, x + w - 4, y, CORNERS[1]);
+    }
+
+    private static void selectedTab(RectangleSink sink, WardrobeLayout.Bounds tab,
+            WardrobeLayout.Bounds join, boolean leftFrameEdge) {
+        int x = tab.x(), w = tab.width(), y = join.y();
+        tabBody(sink, tab, y);
+        rect(sink, x, y, w, join.height(), FRAME_COLOR);
+        // 左端页签延续主框竖边；内部页签在接缝中转入顶边，两者不共用侧边高度。
+        rect(sink, x, y, 1, leftFrameEdge ? join.height() : 1, OUTLINE_COLOR);
+        rect(sink, x + 1, y, 2, leftFrameEdge ? join.height() : 2, HIGHLIGHT_COLOR);
+        if (!leftFrameEdge) {
+            rect(sink, x, y + 1, 1, 1, HIGHLIGHT_COLOR);
+            rect(sink, x, y + 2, 2, 1, HIGHLIGHT_COLOR);
+        }
+        rect(sink, x + w - 1, y, 1, 1, OUTLINE_COLOR);
+        rect(sink, x + w - 3, y, 2, 2, SHADOW_COLOR);
+        rect(sink, x + w - 1, y + 1, 1, 1, HIGHLIGHT_COLOR);
+        rect(sink, x + w - 3, y + 2, 1, 1, SHADOW_COLOR);
+        rect(sink, x + w - 2, y + 2, 2, 1, HIGHLIGHT_COLOR);
+    }
 
 	static void slot(RectangleSink sink, WardrobeLayout.Bounds bounds) {
 		int x = bounds.x(), y = bounds.y(), w = bounds.width(), h = bounds.height();

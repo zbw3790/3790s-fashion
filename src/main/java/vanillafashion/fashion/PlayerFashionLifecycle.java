@@ -27,11 +27,21 @@ public final class PlayerFashionLifecycle {
 	}
 
 	public void register() {
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> start(
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            requireServerThread(server);
+            start(
 				server.getDataStorage(),
 				FabricLoader.getInstance().getConfigDir().resolve("vanilla-fashion/capes"),
-				server.getWorldPath(LevelResource.DATA)));
-		ServerLifecycleEvents.SERVER_STOPPED.register(server -> stop(server.getDataStorage()));
+				server.getWorldPath(LevelResource.DATA));
+        });
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            requireServerThread(server);
+            beginStopping(server.getDataStorage());
+        });
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            requireServerThread(server);
+            stop(server.getDataStorage());
+        });
 	}
 
 	public Optional<PlayerFashionService> current(MinecraftServer server) {
@@ -49,18 +59,31 @@ public final class PlayerFashionLifecycle {
 		CapeRegistryKnowledge knowledge = CapeRegistryLifecycle.load(capeRegistry, capesRoot, logger);
 		PlayerFashionPersistence.LoadResult loaded = PlayerFashionPersistence.load(storage, dataDirectory, logger);
 		PlayerFashionService service = new PlayerFashionService(loaded, knowledge);
-		PlayerFashionService.ReconciliationResult reconciled = service.reconcile(knowledge);
+		var outfits = new vanillafashion.outfit.OutfitRegistryLoader(4096).load(capesRoot.resolveSibling("outfits"));
+		PlayerFashionService.ReconciliationResult reconciled = service.reconcile(knowledge, outfits, entry -> { });
+		logger.info("Vanilla Fashion 装束 Registry：可信={}，定义={}，内容={}。", outfits.knowledge().trustworthy(), outfits.registry().size(), outfits.assets().size());
 		services.put(storage, service);
 		logger.info("Vanilla Fashion 玩家时装服务已加载：保存记录 {}，明确删除 {}，休眠 {}，状态 {}。",
 				service.storedCount(), reconciled.clearedCount(), reconciled.dormantCount(), service.availability());
 		return service;
 	}
 
+    private static void requireServerThread(MinecraftServer server) {
+        if (!server.isSameThread()) throw new IllegalStateException("时装服务生命周期必须在服务器线程执行。");
+    }
+
+    void beginStopping(SavedDataStorage storage) {
+        var service = services.get(storage);
+        if (service != null && service.availability() != PlayerFashionService.Availability.STOPPED) {
+            service.stop();
+            logger.debug("聚合时装停止收口：在线={}；运行期 revision 已释放，持久化选择保持。", service.onlineCount());
+        }
+    }
+
 	void stop(SavedDataStorage storage) {
-		PlayerFashionService service = services.remove(storage);
-		if (service != null) {
-			service.stop();
-		}
+        // 正常路径已在 STOPPING 清空；缺失该阶段时仅作一次幂等兜底。
+        beginStopping(storage);
+        services.remove(storage);
 		capeRegistry.clear();
 		logger.info("Vanilla Fashion 玩家时装服务引用与 Cape Registry 已在服务器停止后清除。");
 	}

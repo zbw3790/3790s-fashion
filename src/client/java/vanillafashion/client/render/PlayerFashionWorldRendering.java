@@ -31,9 +31,11 @@ public final class PlayerFashionWorldRendering {
 		for (EntityRenderState state : states) {
 			if (state instanceof AvatarRenderState avatar) {
 				// 每帧都写入，包括 lookup miss；不保留复用 RenderState 上的旧外观。
-				var appearance = lookup.apply(avatar.id).map(appearances)
+				var player = lookup.apply(avatar.id);
+				var appearance = player.map(appearances)
 						.orElseGet(PlayerFashionRenderAppearance::unknown);
 				PlayerFashionRenderState.attach(avatar, appearance);
+				vanillafashion.client.render.outfit.OutfitRendering.prepareWorld(avatar, player);
 			}
 		}
 	}

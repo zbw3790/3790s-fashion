@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import vanillafashion.cape.CapeId;
 
-/** 服务端确认的玩家时装状态；保存选择与当前实际生效选择具有不同语义。 */
+/** legacy Cape 权威投影；完整真相由聚合状态维护，此值不建立独立存储。 */
 public record PlayerFashionAuthoritativeState(
 		Optional<CapeId> storedSelection,
 		Optional<CapeId> effectiveSelection

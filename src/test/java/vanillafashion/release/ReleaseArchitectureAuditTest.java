@@ -3,19 +3,25 @@ package vanillafashion.release;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
+import com.google.gson.JsonParser;
+import net.fabricmc.loader.api.SemanticVersion;
 import org.junit.jupiter.api.Test;
 
 class ReleaseArchitectureAuditTest {
 	private static final Set<String> S2C = Set.of(
 			"OpenWardrobePayload", "WardrobeAvailablePayload", "CapeRegistrySnapshotPayload",
 			"CapeAssetDataPayload", "PlayerFashionSnapshotPayload", "PlayerFashionUpdatePayload",
-			"PlayerFashionRemovePayload", "CapeSelectionResultPayload");
+			"PlayerFashionRemovePayload", "CapeSelectionResultPayload",
+            "FullPlayerFashionSnapshotPayload", "FullPlayerFashionUpdatePayload", "FullPlayerFashionRemovePayload",
+            "FullFashionSelectionResultPayload", "OutfitRegistrySnapshotPayload", "OutfitAssetDataPayload");
 
 	@Test
 	void mainSourceSetContainsNoClientOnlyReferences() throws IOException {
@@ -42,9 +48,10 @@ class ReleaseArchitectureAuditTest {
 	}
 
 	@Test
-	void allEightClientReceiversUseCurrentConnectionGate() {
+	void allFourteenClientReceiversUseCurrentConnectionGate() {
 		String network = read(root().resolve(
-				"src/client/java/vanillafashion/client/network/VanillaFashionClientNetworking.java"));
+				"src/client/java/vanillafashion/client/network/VanillaFashionClientNetworking.java"))
+                + read(root().resolve("src/client/java/vanillafashion/client/network/ClientFullFashionNetworking.java"));
 		var matcher = Pattern.compile("registerCurrentConnectionReceiver\\(\\s*(\\w+Payload)\\.TYPE")
 				.matcher(network);
 		Set<String> registered = new HashSet<>();
@@ -67,11 +74,29 @@ class ReleaseArchitectureAuditTest {
 	}
 
 	@Test
-	void releaseMetadataRemainsConsistent() {
+	void releaseMetadataRemainsConsistent() throws IOException {
 		Path project = root();
-		String properties = read(project.resolve("gradle.properties"));
+		Properties properties = new Properties();
+		properties.load(new StringReader(read(project.resolve("gradle.properties"))));
+		String expectedVersion = properties.getProperty("mod_version");
+		assertNotNull(expectedVersion, "唯一版本来源 mod_version 缺失。");
+		assertFalse(expectedVersion.isBlank(), "mod_version 不能为空。");
+		assertDoesNotThrow(() -> SemanticVersion.parse(expectedVersion), "mod_version 必须是合法的语义版本。");
+
+		String build = read(project.resolve("build.gradle"));
+		assertTrue(build.contains("version = project.mod_version"));
+		assertTrue(build.contains("def modVersion = project.version"));
+		assertTrue(build.contains("inputs.property \"version\", modVersion"));
+		assertTrue(build.contains("filesMatching(\"fabric.mod.json\")"));
+		assertTrue(build.contains("expand \"version\": modVersion"));
 		String metadata = read(project.resolve("src/main/resources/fabric.mod.json"));
-		assertTrue(properties.contains("mod_version=0.2.1"));
+		assertEquals("${version}", JsonParser.parseString(metadata).getAsJsonObject().get("version").getAsString(),
+				"源码 metadata 必须继续使用唯一构建版本的替换模板。");
+		// test 的资源依赖保证 processResources 已执行；最终 JAR 在构建后另行审计。
+		String processedMetadata = read(project.resolve("build/resources/main/fabric.mod.json"));
+		assertEquals(expectedVersion,
+				JsonParser.parseString(processedMetadata).getAsJsonObject().get("version").getAsString(),
+				"处理后的 metadata 版本必须与 mod_version 一致。");
 		assertTrue(metadata.contains("vanilla_fashion"));
 		assertTrue(metadata.contains("3790's Vanilla Style Fashion"));
 		assertTrue(metadata.contains("MIT"));
@@ -99,10 +124,10 @@ class ReleaseArchitectureAuditTest {
 		try (var files = Files.walk(project.resolve("src/client/java"))) {
 			mixins = files.filter(path -> path.getFileName().toString().endsWith("Mixin.java")).toList();
 		}
-		assertEquals(1, mixins.size());
-		assertEquals("WingsLayerMixin.java", mixins.getFirst().getFileName().toString());
+		assertEquals(Set.of("WingsLayerMixin.java", "ItemInHandRendererMixin.java", "LivingEntityRendererMixin.java"),
+				mixins.stream().map(path -> path.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
 		String config = read(project.resolve("src/client/resources/vanilla_fashion.client.mixins.json"));
-		String mixin = read(mixins.getFirst());
+		String mixin = read(project.resolve("src/client/java/vanillafashion/client/mixin/WingsLayerMixin.java"));
 		assertTrue(config.contains("WingsLayerMixin"));
 		assertTrue(mixin.contains("@Inject("));
 		assertTrue(mixin.contains("HEAD"));

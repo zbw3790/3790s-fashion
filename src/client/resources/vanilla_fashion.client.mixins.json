@@ -4,7 +4,9 @@
 	"package": "vanillafashion.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"WingsLayerMixin"
+		"WingsLayerMixin",
+		"ItemInHandRendererMixin",
+		"LivingEntityRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -23,8 +23,7 @@ public final class VanillaFashionNetworking {
 	public static void register(CapeRegistryService capeRegistryService, Logger logger) {
 		Objects.requireNonNull(capeRegistryService, "Cape Registry 服务不能为 null。");
 		Objects.requireNonNull(logger, "日志记录器不能为 null。");
-		CapeAssetRequestTracker requestTracker = new CapeAssetRequestTracker();
-		PlayerFashionNetworking.register(logger);
+		var networking = PlayerFashionNetworking.register(logger);
 
 		PayloadTypeRegistry.clientboundPlay().register(
 				OpenWardrobePayload.TYPE,
@@ -49,21 +48,21 @@ public final class VanillaFashionNetworking {
 
 		boolean assetRequestReceiverRegistered = ServerPlayNetworking.registerGlobalReceiver(
 				CapeAssetRequestPayload.TYPE,
-				(payload, context) -> handleAssetRequest(
+				(payload, context) -> networking.execute(context.server(), channel -> handleAssetRequest(
 						payload,
 						context.player(),
 						capeRegistryService,
-						requestTracker,
+						channel.capes,
 						logger
-				)
+				))
 		);
 
 		if (!assetRequestReceiverRegistered) {
 			throw new IllegalStateException("Vanilla Fashion Cape 资产请求接收器重复注册。");
 		}
 
-		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			requestTracker.open(handler.getPlayer().getUUID(), handler);
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> networking.execute(server, channel -> {
+			channel.capes.open(handler.getPlayer().getUUID(), handler);
 
 			ServerPayloadSender.sendIfSupported(handler, WardrobeAvailablePayload.INSTANCE);
 
@@ -98,11 +97,11 @@ public final class VanillaFashionNetworking {
 			} catch (IllegalArgumentException exception) {
 				logger.error("Vanilla Fashion 无法构建 Cape Registry Snapshot；未向玩家发送。", exception);
 			}
-		});
-		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-				requestTracker.close(handler.getPlayer().getUUID(), handler));
+		}));
+        // 普通离开和停服均由同一网络生命周期清理 Cape 连接预算。
 
-		logger.info("Vanilla Fashion 八种 S2C、两种 C2S payload 与连接生命周期已注册。");
+
+		logger.info("Vanilla Fashion 十四种 S2C、四种 C2S payload 与连接生命周期已注册。");
 	}
 
 	private static void handleAssetRequest(

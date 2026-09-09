@@ -211,6 +211,79 @@ class WardrobeGuiPainterTest {
 				new WardrobeLayout.Bounds(0, 0, 18, 18)));
 	}
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"320,0", "320,1", "200,0", "200,1"})
+    void bothTabsAndBothLayoutsHaveOneContinuousOuterBoundaryAndOpenSelectedSeam(int width, int selected) throws Exception {
+        var layout = WardrobeLayout.calculate(width, 240, 9);
+        var frame = layout.frameBounds(); var tab = layout.tabBounds(selected);
+        var inactive = layout.tabBounds(1 - selected); var join = layout.tabJoinBounds(selected);
+        Commands commands = new Commands(); WardrobeGuiPainter.frameWithTabs(commands, layout, selected);
+        for (int y = layout.tabBounds(0).y() + 4; y < frame.bottom() - 4; y++) {
+            assertEquals(WardrobeGuiPainter.OUTLINE_COLOR, commands.colorAt(frame.x(), y), "左边框不能有缺口");
+            assertEquals(selected == 1 && y == frame.y() ? WardrobeGuiPainter.OUTLINE_COLOR : WardrobeGuiPainter.HIGHLIGHT_COLOR,
+                    commands.colorAt(frame.x() + 1, y), "除顶边交点外不能形成双黑边");
+            assertEquals(0, commands.colorAt(frame.x() - 1, y), "不能突出一像素");
+        }
+        for (int x = frame.x(); x < frame.right() - 4; x++) {
+            if (x < join.x() || x >= join.right()) {
+                assertEquals(WardrobeGuiPainter.OUTLINE_COLOR, commands.colorAt(x, frame.y()));
+            }
+        }
+        for (int y = join.y(); y < join.bottom(); y++) for (int x = join.x() + 3; x < join.right() - 3; x++)
+            assertEquals(WardrobeGuiPainter.FRAME_COLOR, commands.colorAt(x, y));
+        for (int x = inactive.x() + 3; x < inactive.right() - 1; x++) {
+            assertEquals(WardrobeGuiPainter.SHADOW_COLOR, commands.colorAt(x, frame.y() - 2));
+            assertEquals(WardrobeGuiPainter.SHADOW_COLOR, commands.colorAt(x, frame.y() - 1));
+            assertEquals(WardrobeGuiPainter.OUTLINE_COLOR, commands.colorAt(x, frame.y()));
+        }
+        if (selected == 1) {
+            for (int x = join.x(); x < join.right(); x++)
+                assertEquals(WardrobeGuiPainter.FRAME_COLOR, commands.colorAt(x, join.bottom() - 1));
+            assertEquals(WardrobeGuiPainter.HIGHLIGHT_COLOR, commands.colorAt(join.x(), join.y() + 1));
+        }
+        // 所有黑色外轮廓像素必须属于一个八连通分量，包含原版阶梯圆角。
+        var black = new java.util.HashSet<List<Integer>>();
+        for (int y = tab.y(); y < frame.bottom(); y++) for (int x = frame.x(); x < frame.right(); x++)
+            if (commands.colorAt(x, y) == WardrobeGuiPainter.OUTLINE_COLOR) black.add(List.of(x, y));
+        var queue = new java.util.ArrayDeque<List<Integer>>(); queue.add(black.iterator().next());
+        var visited = new java.util.HashSet<List<Integer>>();
+        while (!queue.isEmpty()) {
+            var point = queue.removeFirst(); if (!visited.add(point)) continue;
+            for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                var next = List.of(point.get(0) + dx, point.get(1) + dy);
+                if (black.contains(next) && !visited.contains(next)) queue.add(next);
+            }
+        }
+        assertEquals(black, visited);
+        // 仅保存矩形命令的内部位图，不捕获或启动 Minecraft。
+        var image = new java.awt.image.BufferedImage(frame.width(), 40, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < 40; y++) for (int x = 0; x < frame.width(); x++)
+            image.setRGB(x, y, commands.colorAt(frame.x() + x, tab.y() + y));
+        var folder = java.nio.file.Path.of("painter-regression"); java.nio.file.Files.createDirectories(folder);
+        javax.imageio.ImageIO.write(image, "PNG", folder.resolve("frame-" + width + "-" + selected + ".png").toFile());
+    }
+
+    @Test
+    void shirtIconIsSymmetricOpaquePixelArtUsingCapePaletteWithoutExtraSymbols() {
+        var bounds = new WardrobeLayout.Bounds(0, 0, 16, 16);
+        Commands shirt = new Commands(), cape = new Commands();
+        WardrobeGuiPainter.outfitIcon(shirt, bounds); WardrobeGuiPainter.capeIcon(cape, bounds);
+        var palette = new java.util.HashSet<Integer>(); cape.rectangles.forEach(rect -> palette.add(rect.color()));
+        for (var rect : shirt.rectangles) { assertTrue(rect.inside(bounds)); assertTrue(palette.contains(rect.color())); }
+        for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
+            assertEquals(shirt.colorAt(x, y), shirt.colorAt(15 - x, y));
+            int alpha = shirt.colorAt(x, y) >>> 24; assertTrue(alpha == 0 || alpha == 255);
+            if (x < 2 || x > 13 || y < 2 || y > 13) assertEquals(0, alpha);
+        }
+        assertTrue(shirt.colorAt(2, 5) != 0); assertTrue(shirt.colorAt(13, 5) != 0);
+        assertEquals(0, shirt.colorAt(2, 9)); assertEquals(0, shirt.colorAt(13, 9));
+        assertTrue(shirt.colorAt(4, 12) != 0); assertTrue(shirt.colorAt(11, 12) != 0);
+        assertThrows(IllegalArgumentException.class, () -> WardrobeGuiPainter.outfitIcon(new Commands(),
+                new WardrobeLayout.Bounds(0, 0, 32, 32)));
+        Commands again = new Commands(); WardrobeGuiPainter.outfitIcon(again, bounds);
+        assertEquals(shirt.rectangles, again.rectangles);
+    }
+
 	private static double luminance(int color) {
 		return 0.2126D * linearChannel((color >>> 16) & 0xFF)
 				+ 0.7152D * linearChannel((color >>> 8) & 0xFF)

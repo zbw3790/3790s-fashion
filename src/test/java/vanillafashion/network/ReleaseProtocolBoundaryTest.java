@@ -35,7 +35,7 @@ class ReleaseProtocolBoundaryTest {
 	);
 
 	@Test
-	void finalProtocolHasEightClientboundAndTwoServerboundPayloads() {
+	void legacyExactSetKeepsEightClientboundAndTwoServerboundPayloads() {
 		assertEquals(8, S2C.size());
 		assertEquals(2, C2S.size());
 		Set<Identifier> allIds = java.util.stream.Stream.concat(S2C.stream(), C2S.stream())
@@ -66,7 +66,7 @@ class ReleaseProtocolBoundaryTest {
 	void clientRequestsCannotNameAnotherPlayerOrFilesystemLocation() {
 		assertEquals(List.of("sha256Hashes"), componentNames(CapeAssetRequestPayload.class));
 		assertEquals(List.of("requestId", "selection"), componentNames(SetCapeSelectionPayload.class));
-		for (Class<?> request : List.of(CapeAssetRequestPayload.class, SetCapeSelectionPayload.class)) {
+		for (Class<?> request : List.of(CapeAssetRequestPayload.class, SetCapeSelectionPayload.class, OutfitAssetRequestPayload.class, SetFullFashionSelectionPayload.class)) {
 			for (RecordComponent component : request.getRecordComponents()) {
 				assertFalse(component.getType() == UUID.class);
 				assertFalse(component.getType() == Path.class);
@@ -76,7 +76,33 @@ class ReleaseProtocolBoundaryTest {
 		}
 	}
 
-	private static List<String> componentNames(Class<?> recordType) {
+    @Test
+    void v2AndCombinedExactSetsMatchActualRegistration() throws Exception {
+        var newS2c=Set.of(OutfitRegistrySnapshotPayload.TYPE,OutfitAssetDataPayload.TYPE,FullPlayerFashionSnapshotPayload.TYPE,
+                FullPlayerFashionUpdatePayload.TYPE,FullPlayerFashionRemovePayload.TYPE,FullFashionSelectionResultPayload.TYPE);
+        var newC2s=Set.of(OutfitAssetRequestPayload.TYPE,SetFullFashionSelectionPayload.TYPE);
+        assertEquals(Set.of("outfit_registry_snapshot","outfit_asset_data","full_player_fashion_snapshot","full_player_fashion_update","full_player_fashion_remove","full_fashion_selection_result"),newS2c.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(Set.of("outfit_asset_request","set_full_fashion_selection"),newC2s.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
+        java.util.Set<String> expectedS=new java.util.HashSet<>(),expectedC=new java.util.HashSet<>();
+        java.util.stream.Stream.concat(S2C.stream(),newS2c.stream()).forEach(t->expectedS.add(t.id().getPath()));
+        java.util.stream.Stream.concat(C2S.stream(),newC2s.stream()).forEach(t->expectedC.add(t.id().getPath()));
+        assertEquals(14,expectedS.size());assertEquals(4,expectedC.size());
+        Path root=Path.of(System.getProperty("user.dir")).toAbsolutePath();while(!java.nio.file.Files.exists(root.resolve("settings.gradle")))root=root.getParent();
+        String source=java.nio.file.Files.readString(root.resolve("src/main/java/vanillafashion/network/VanillaFashionNetworking.java"))+java.nio.file.Files.readString(root.resolve("src/main/java/vanillafashion/network/PlayerFashionNetworking.java"));
+        for(boolean clientbound:new boolean[]{true,false}){
+            var pattern=java.util.regex.Pattern.compile((clientbound?"clientboundPlay":"serverboundPlay")+"\\(\\)\\.register\\(\\s*(\\w+Payload)\\.TYPE");
+            var matcher=pattern.matcher(source);java.util.Set<String> actual=new java.util.HashSet<>();int count=0;
+            while(matcher.find()){var type=(CustomPacketPayload.Type<?>)Class.forName("vanillafashion.network."+matcher.group(1)).getField("TYPE").get(null);actual.add(type.id().getPath());count++;}
+            assertEquals(clientbound?expectedS:expectedC,actual);assertEquals(actual.size(),count);
+        }
+    }
+    @Test void serverRouteNeedsAllThreeStateReceiversAndCannotBeInferredFromCodec(){
+        for(int mask=0;mask<16;mask++){
+            var route=vanillafashion.fashion.FashionAuthorityRoute.server((mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0);
+            assertEquals((mask&7)==7?vanillafashion.fashion.FashionAuthorityRoute.V2:(mask&8)!=0?vanillafashion.fashion.FashionAuthorityRoute.LEGACY:vanillafashion.fashion.FashionAuthorityRoute.UNDECIDED,route);
+        }
+    }
+    private static List<String> componentNames(Class<?> recordType) {
 		return java.util.Arrays.stream(recordType.getRecordComponents())
 				.map(RecordComponent::getName)
 				.toList();

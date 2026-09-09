@@ -27,6 +27,9 @@ final class CapeGridEntryWidget extends AbstractButton {
 	private CapeWardrobeContent.SlotModel model;
 	private String tooltipText;
 	private boolean dimmed;
+    private boolean screenTooltip;
+    void useScreenTooltip() { screenTooltip=true;setTooltip(null); }
+    String tooltipText() { return tooltipText; }
 
 	CapeGridEntryWidget(WardrobeLayout.Bounds bounds,
 			Supplier<CapeWardrobeContent.SlotModel> modelLookup,
@@ -50,7 +53,7 @@ final class CapeGridEntryWidget extends AbstractButton {
 		if (!currentTooltip.equals(tooltipText)) {
 			tooltipText = currentTooltip;
 			setMessage(Component.literal(currentTooltip));
-			setTooltip(Tooltip.create(Component.literal(currentTooltip)));
+			if (!screenTooltip) setTooltip(Tooltip.create(Component.literal(currentTooltip)));
 		}
 	}
 

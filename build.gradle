@@ -28,7 +28,7 @@ dependencies {
 	testImplementation 'org.junit.jupiter:junit-jupiter'
 	// 在普通测试 JVM 中应用 Fabric 的真实补丁，不启动游戏或服务器。
 	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'org.junit.platform:junit-platform-launcher'
 }
 
 processResources {
@@ -57,5 +57,7 @@ tasks.named('test') {
 	workingDir = layout.buildDirectory.dir('test-work').get().asFile
 	doFirst {
 		workingDir.mkdirs()
+		// 独立测试 JVM 使用同一实际 classpath 复验 SavedData 重读，不启动 Minecraft。
+		systemProperty 'vanillaFashion.testRuntimeClasspath', sourceSets.test.runtimeClasspath.asPath
 	}
 }

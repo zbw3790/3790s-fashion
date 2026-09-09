@@ -216,6 +216,12 @@ class CapeSelectionHandlerTest {
 		}
 	}
 
+    @Test void v2RouteCannotUseLegacyWriteOrReceiveLegacyResult() {
+        var data=data(Map.of(FIRST,FOUNDER));var service=service(data,valid(root));Object connection=new Object();service.join(FIRST,connection,e->{});
+        var result=CapeSelectionHandler.process(FIRST,new SetCapeSelectionPayload(1,Optional.of(BUILDER)),Optional.of(service),FashionAuthorityRoute.V2,true,true);
+        assertTrue(result.isEmpty());assertEquals(Optional.of(FOUNDER),service.getStoredSelection(FIRST));assertEquals(0,service.authority(FIRST).orElseThrow().revision());assertFalse(data.isDirty());
+    }
+
 	private static void assertRejected(CapeSelectionHandler.Outcome outcome, CapeSelectionReason reason,
 			PlayerFashionAuthoritativeState authoritative) {
 		assertFalse(outcome.result().accepted());

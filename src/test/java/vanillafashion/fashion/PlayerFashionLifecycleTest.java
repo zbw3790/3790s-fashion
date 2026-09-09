@@ -35,6 +35,36 @@ class PlayerFashionLifecycleTest {
 		bootstrap();
 	}
 
+    @Test
+    void stoppingReleasesOnlineAuthorityBeforeFinalRemovalWithoutWritingStored() throws IOException {
+        Path capes = temporaryDirectory.resolve("capes");
+        writeCape(capes, "founder", "cape_elytra.png");
+        writeCape(capes, "builder", "cape_elytra.png");
+        Path directory = temporaryDirectory.resolve("save/data");
+        seed(directory);
+        Path file = directory.resolve("vanilla_fashion/player_fashion.dat");
+        byte[] before = Files.readAllBytes(file);
+        var registry = new CapeRegistryService();
+        var lifecycle = new PlayerFashionLifecycle(registry, NOPLogger.NOP_LOGGER);
+        try (SavedDataStorage storage = storage(directory)) {
+            var service = lifecycle.start(storage, capes, directory);
+            Object connection = new Object();
+            service.join(FIRST, connection, e -> fail("初次加入不应产生 LEFT。"));
+            var stored = service.stored(FIRST);
+            lifecycle.beginStopping(storage);
+            assertSame(service, lifecycle.current(storage).orElseThrow());
+            assertEquals(PlayerFashionService.Availability.STOPPED, service.availability());
+            assertEquals(0, service.onlineCount()); assertTrue(service.authority(FIRST).isEmpty());
+            assertTrue(service.outfits().isEmpty()); assertEquals(stored, service.stored(FIRST));
+            assertFalse(service.leave(FIRST, connection, e -> fail("停止后不应重复 LEFT。")));
+            assertThrows(IllegalStateException.class, () -> service.join(FIRST, new Object(), e -> {}));
+            lifecycle.beginStopping(storage); lifecycle.stop(storage); lifecycle.stop(storage);
+            assertTrue(lifecycle.current(storage).isEmpty()); assertTrue(registry.current().isEmpty());
+            storage.saveAndJoin();
+        }
+        assertArrayEquals(before, Files.readAllBytes(file));
+    }
+
 	@Test
 	void startupLoadsRegistryBeforeDataAndPublishesOnlyReconciledService() throws IOException {
 		Path capes = temporaryDirectory.resolve("capes");
@@ -47,14 +77,14 @@ class PlayerFashionLifecycleTest {
 		try (SavedDataStorage storage = new SavedDataStorage(directory, DataFixers.getDataFixer(),
 				HolderLookup.Provider.create(Stream.empty())) {
 			@Override
-			public <T extends SavedData> T get(SavedDataType<T> type) {
+			public <T extends SavedData> void set(SavedDataType<T> type, T value) {
 				if (type.equals(PlayerFashionSavedData.TYPE)) {
 					assertEquals(1, registry.current().size());
 					assertTrue(registry.current().find(FOUNDER).isPresent());
 					assertTrue(lifecycle.current(this).isEmpty());
 					observed[0] = true;
 				}
-				return super.get(type);
+				super.set(type, value);
 			}
 		}) {
 			assertTrue(lifecycle.current(storage).isEmpty());

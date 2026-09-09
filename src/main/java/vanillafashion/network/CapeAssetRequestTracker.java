@@ -47,6 +47,8 @@ public final class CapeAssetRequestTracker {
 		return ClaimResult.ACCEPTED;
 	}
 
+	public void clear() { connections.clear(); }
+
 	public int connectionCount() {
 		return connections.size();
 	}

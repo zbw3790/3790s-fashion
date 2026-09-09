@@ -103,7 +103,7 @@ class PlayerFashionPersistenceTest {
 			assertEquals(PlayerFashionService.MutationResult.SERVICE_UNAVAILABLE, service.setSelection(FIRST, Optional.empty()));
 			service.reconcile(valid(temporaryDirectory));
 			assertFalse(loaded.data().isDirty());
-			assertNull(storage.get(PlayerFashionSavedData.TYPE));
+			// 不调用 storage.get 再次读取坏文件；以下真实保存证明没有注册空替身。
 			// 同一真实存储继续保存其他脏数据，证明并非通过禁止全局保存来保护坏文件。
 			storage.set(controlType, data(Map.of(SECOND, BUILDER)));
 			storage.scheduleSave().join();
@@ -119,30 +119,18 @@ class PlayerFashionPersistenceTest {
 		assertArrayEquals(damaged, Files.readAllBytes(file));
 	}
 
-	@Test
-	void invalidEntriesAreIsolatedAndNormalizedThroughRealSave() throws IOException {
-		Path directory = temporaryDirectory.resolve("save/data");
-		Path file = createSavedFile(directory);
-		CompoundTag outer = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
-		CompoundTag content = encoded(entry(FIRST.toString(), "founder"), entry("invalid", "builder"),
-				entry(SECOND.toString(), "BAD ID"), entry(SECOND.toString(), "builder"), entry(FIRST.toString(), "builder"));
-		outer.put("data", content);
-		NbtIo.writeCompressed(outer, file);
-		try (SavedDataStorage storage = storage(directory)) {
-			var loaded = load(storage, directory);
-			assertTrue(loaded.degradedReason().isEmpty());
-			assertEquals(3, loaded.data().rejectedEntryCount());
-			assertEquals(Map.of(FIRST, FOUNDER, SECOND, BUILDER), loaded.data().snapshot());
-			assertTrue(loaded.data().isDirty());
-			storage.saveAndJoin();
-		}
-		try (SavedDataStorage storage = storage(directory)) {
-			var loaded = load(storage, directory);
-			assertEquals(0, loaded.data().rejectedEntryCount());
-			assertFalse(loaded.data().isDirty());
-			assertEquals(2, loaded.data().size());
-		}
-	}
+    @Test
+    void invalidEntryAndValidSiblingAreProtectedAsWholeFile() throws IOException {
+        Path directory=temporaryDirectory.resolve("save/data"); Path file=createSavedFile(directory);
+        CompoundTag outer=NbtIo.readCompressed(file,NbtAccounter.create(PlayerFashionPersistence.MAX_NBT_BYTES));
+        outer.put("data",encoded(entry(FIRST.toString(),"founder"),entry("invalid","builder")));
+        NbtIo.writeCompressed(outer,file); byte[] original=Files.readAllBytes(file);
+        try (SavedDataStorage storage=storage(directory)) {
+            var loaded=load(storage,directory); assertTrue(loaded.degradedReason().isPresent()); assertFalse(loaded.authoritativeStateKnown());
+            assertFalse(loaded.data().isDirty()); storage.saveAndJoin();
+        }
+        assertArrayEquals(original,Files.readAllBytes(file));
+    }
 
 	@Test
 	void missingFileIsNotWrittenUntilActualMutation() throws IOException {

@@ -1,0 +1,15 @@
+{
+  "来源": "冻结 v0.2.1 发布 JAR 中原 PlayerFashionSavedData 类及其 Codec，在 Fabric JUnit 普通 JVM 中通过 SavedDataStorage 保存。",
+  "jar": "run/v021-release/20260907T045221Z/published-download/vanilla-fashion-0.2.1.jar",
+  "jar_sha256": "0f2988a6aef855b6d3a0287c84fd79f1745d980204e924314d0459305e9a0687",
+  "fixture": "frozen-v021-player-fashion.dat",
+  "fixture_sha256": "7ddc07fb644f4768a951fd67d321afe270134b4cc81cefaab07ff3cd66bcec54",
+  "fixture_bytes": 126,
+  "生成器": "run/v030-s03-dev-audit/20260908-01/fixture-source/vanillafashion/fashion/GenerateFrozenV1FixtureTest.java",
+  "schema_version": 1,
+  "条目": {
+    "00000000-0000-0000-0000-000000000001": "founder",
+    "00000000-0000-0000-0000-000000000002": "builder"
+  },
+  "Runtime": "未执行"
+}

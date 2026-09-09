@@ -26,7 +26,9 @@ final class WardrobePlayerPreviewRenderer {
 			float previewYawDegrees,
 			LocalPlayer player,
 			WardrobePreviewAppearance appearance,
-			WardrobePreviewMode mode
+			WardrobePreviewMode mode,
+            java.util.Optional<WardrobePreviewDraft> draft,
+            WardrobeOutfitSource outfits
 	) {
 		var equipmentAssets = WardrobePreviewEquipment.assets();
 		if (equipmentAssets.isEmpty()) {
@@ -71,6 +73,9 @@ final class WardrobePlayerPreviewRenderer {
 				0.0F
 		);
 		// GUI record 持有本次状态与新建变换；提交后不再修改或复用。
+		if (draft.isPresent()) vanillafashion.client.render.outfit.OutfitRendering.preparePreview(state,player.getUUID(),
+                draft.orElseThrow().provider(outfits.connection(),player.getUUID(),outfits.textures));
+        else vanillafashion.client.render.outfit.OutfitRendering.preparePreview(state,player.getUUID());
 		graphics.entity(
 				state,
 				entitySize,

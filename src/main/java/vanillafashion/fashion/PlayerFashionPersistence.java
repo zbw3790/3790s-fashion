@@ -13,6 +13,8 @@ import net.minecraft.world.level.storage.SavedDataStorage;
 import org.slf4j.Logger;
 
 public final class PlayerFashionPersistence {
+	public static final long MAX_NBT_BYTES = 64L * 1024 * 1024;
+
 	private PlayerFashionPersistence() {
 	}
 
@@ -37,14 +39,23 @@ public final class PlayerFashionPersistence {
 					return degraded(logger, "无法确认玩家时装存档是否存在。");
 				}
 			}
-			PlayerFashionSavedData loaded = storage.get(PlayerFashionSavedData.TYPE);
-			if (loaded != null) {
-				if (loaded.rejectedEntryCount() > 0) {
-					logger.warn("玩家时装存档已跳过 {} 条无效或重复记录，其余合法记录保留。", loaded.rejectedEntryCount());
-				}
-				return new LoadResult(loaded, Optional.empty());
-			}
-			// get 失败不调用 computeIfAbsent；只有前后均能确认缺失时才建立默认值。
+            if (!missing) {
+                // 同一次有界读取的 NBT 直接进入正式 Codec；不再让 storage.get 无界重读。
+                net.minecraft.nbt.CompoundTag root;
+                try (var input = new java.io.PushbackInputStream(Files.newInputStream(file), 2)) {
+                    byte[] signature = input.readNBytes(2); input.unread(signature);
+                    var budget = net.minecraft.nbt.NbtAccounter.create(MAX_NBT_BYTES);
+                    root = signature.length == 2 && (signature[0] & 255) == 31 && (signature[1] & 255) == 139
+                            ? net.minecraft.nbt.NbtIo.readCompressed(input, budget)
+                            : net.minecraft.nbt.NbtIo.read(new java.io.DataInputStream(input), budget);
+                }
+                var content = root.getCompound("data").orElseThrow(() -> new IllegalArgumentException("存档缺少 data 复合标签。"));
+                var loaded = PlayerFashionSavedData.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, content).getOrThrow();
+                storage.set(PlayerFashionSavedData.TYPE, loaded);
+                loaded.setDirty(false);
+                return new LoadResult(loaded, Optional.empty());
+            }
+			// 只有前后均能确认缺失时才建立默认值，不为坏文件注册空替身。
 			if (missing && Files.notExists(file, LinkOption.NOFOLLOW_LINKS)) {
 				PlayerFashionSavedData created = new PlayerFashionSavedData();
 				storage.set(PlayerFashionSavedData.TYPE, created);
@@ -52,7 +63,7 @@ public final class PlayerFashionPersistence {
 				return new LoadResult(created, Optional.empty());
 			}
 			return degraded(logger, "玩家时装存档读取或解码失败；原文件保留，所有持久化修改已禁止。");
-		} catch (IOException | SecurityException exception) {
+		} catch (IOException | RuntimeException exception) {
 			return degraded(logger, "无法安全访问玩家时装存档；原文件保留，所有持久化修改已禁止。");
 		}
 	}

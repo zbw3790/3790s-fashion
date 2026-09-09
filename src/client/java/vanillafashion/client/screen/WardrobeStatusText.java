@@ -39,10 +39,12 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 		Priority priority;
 		String status;
 		// 优先级决定实际第二行；被覆盖的会话提示仍通过完整文本和旁白提供。
-		if (selection.lastError().isPresent()) {
+		if (selection.hasError()) {
 			priority = Priority.ERROR;
 			status = sessionStatus;
-		} else if (contentState == CapeWardrobeContent.State.ERROR) {
+		} else if (selection.v2() && selection.waiting()) {
+            priority=Priority.PENDING;status=selection.pendingStatus();
+        } else if (contentState == CapeWardrobeContent.State.ERROR) {
 			priority = Priority.ERROR;
 			status = contentText;
 		} else if (snapshotState == ClientPlayerFashionRegistry.State.UNAVAILABLE) {
@@ -57,7 +59,7 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 		} else if (outstanding) {
 			priority = Priority.PENDING;
 			status = "正在等待之前的选择确认";
-		} else if (selection.dormant() && !selection.dirty()) {
+		} else if (selection.dormant() && selection.draft().equals(selection.baseline())) {
 			priority = Priority.DORMANT;
 			status = sessionStatus;
 		} else if (!selection.authorityKnown() || snapshotState != ClientPlayerFashionRegistry.State.AVAILABLE) {
@@ -73,7 +75,7 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 			priority = Priority.NORMAL;
 			status = sessionStatus.isEmpty() ? contentText : sessionStatus;
 		}
-		var supplementalLines = new ArrayList<String>();
+		var supplementalLines = new ArrayList<String>(selection.supplementalStatus());
 		if (!sessionStatus.isEmpty() && !sessionStatus.equals(status)) {
 			supplementalLines.add(sessionStatus);
 		}

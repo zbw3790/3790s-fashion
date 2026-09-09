@@ -208,7 +208,7 @@ class PlayerFashionServiceTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"invalid_uuid", "short_uuid", "invalid_cape", "missing_uuid", "missing_cape", "wrong_type", "non_compound"})
-	void malformedEntryDoesNotEraseValidSibling(String damage) {
+	void malformedEntryRejectsWholeFileIncludingValidSibling(String damage) {
 		CompoundTag broken = entry(SECOND.toString(), "builder");
 		switch (damage) {
 			case "invalid_uuid" -> broken.putString("uuid", "bad");
@@ -225,10 +225,7 @@ class PlayerFashionServiceTest {
 			ListTag entries = rootTag.getList("entries").orElseThrow();
 			entries.set(1, StringTag.valueOf("不是复合标签"));
 		}
-		var data = PlayerFashionSavedData.CODEC.parse(NbtOps.INSTANCE, rootTag).getOrThrow();
-		assertEquals(Map.of(FIRST, FOUNDER), data.snapshot());
-		assertEquals(1, data.rejectedEntryCount());
-		assertTrue(data.isDirty());
+		assertTrue(PlayerFashionSavedData.CODEC.parse(NbtOps.INSTANCE, rootTag).error().isPresent());
 	}
 
 	@Test

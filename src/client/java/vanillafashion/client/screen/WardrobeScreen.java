@@ -1,6 +1,13 @@
 package vanillafashion.client.screen;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.input.InputWithModifiers;
+import vanillafashion.client.network.ClientFullFashionNetworking;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -27,6 +34,8 @@ import vanillafashion.client.cape.ClientCapeTextureResolver;
 import vanillafashion.client.fashion.ClientPlayerFashionRegistry;
 import vanillafashion.client.network.ClientCapeSelectionRequestTracker;
 import vanillafashion.network.SetCapeSelectionPayload;
+import vanillafashion.network.SetFullFashionSelectionPayload;
+import vanillafashion.fashion.FashionAuthorityRoute;
 
 /** 承载唯一 Draft、玩家预览和应用入口；Cape 内容只管理网格与分页。 */
 public final class WardrobeScreen extends Screen {
@@ -47,31 +56,52 @@ public final class WardrobeScreen extends Screen {
 	private final ClientCapeTextureResolver textureResolver;
 	private final WardrobePreviewRotation previewRotation = new WardrobePreviewRotation();
 	private final WardrobePlayerPreviewRenderer previewRenderer = new WardrobePlayerPreviewRenderer();
-	private final SelectedTab selectedTab = SelectedTab.CAPE;
+	private SelectedTab selectedTab = SelectedTab.CAPE;
 	private WardrobePreviewMode previewMode = WardrobePreviewMode.CAPE;
 	private WardrobePreviewAppearanceResolver previewAppearanceResolver;
 	private List<CapeCosmeticMetadata> previewMetadata;
 	private WardrobeLayout layout;
 	private Button applyButton;
+    private Button reloadButton;
+    private final OutfitWardrobeContent outfitContent;
+    private final WardrobeOutfitSource outfitSource;
+    private final Map<AbstractWidget,String> focusKeys=new LinkedHashMap<>();
+    private String rememberedFocus;
+    private boolean rebuilding;
+    private boolean recoveryShown;
+    private int contentWidgetIndex;
+    private boolean renderedV2;
+    private final Map<SelectedTab,String> tabFocus=new java.util.EnumMap<>(SelectedTab.class);
+    private final WardrobeTooltipState tooltipState=new WardrobeTooltipState();
+    private boolean keyboardInput;
+    private int tooltipAnchorX,tooltipAnchorY;
 
 	public WardrobeScreen(ClientCapeRegistry capeRegistry, ClientCapeTextureManager textureManager,
 			ClientPlayerFashionRegistry playerFashions, ClientCapeSelectionRequestTracker requests,
 			UUID self, Object connection) {
 		this(Minecraft.getInstance(), Minecraft.getInstance().font, capeRegistry, textureManager,
-				playerFashions, requests, self, connection, runtimeActions(Minecraft.getInstance()));
+				playerFashions, requests, self, connection, runtimeActions(Minecraft.getInstance()),
+                vanillafashion.client.VanillaFashionClient.wardrobeOutfits());
 	}
 
 	/** 将屏幕外部的输入绑定、发送和关闭动作集中在一个边界，便于普通 JVM 验证。 */
 	WardrobeScreen(Minecraft minecraft, Font font, ClientCapeRegistry capeRegistry,
 			ClientCapeTextureManager textureManager, ClientPlayerFashionRegistry playerFashions,
 			ClientCapeSelectionRequestTracker requests, UUID self, Object connection, Actions actions) {
-		super(minecraft, Objects.requireNonNull(font), TITLE);
+        this(minecraft,font,capeRegistry,textureManager,playerFashions,requests,self,connection,actions,WardrobeOutfitSource.empty());
+    }
+    WardrobeScreen(Minecraft minecraft, Font font, ClientCapeRegistry capeRegistry,
+            ClientCapeTextureManager textureManager, ClientPlayerFashionRegistry playerFashions,
+            ClientCapeSelectionRequestTracker requests, UUID self, Object connection, Actions actions, WardrobeOutfitSource outfitSource) {
+        super(minecraft, Objects.requireNonNull(font), TITLE);
 		this.playerFashions = Objects.requireNonNull(playerFashions);
 		this.requests = Objects.requireNonNull(requests);
 		this.self = Objects.requireNonNull(self);
 		this.connection = Objects.requireNonNull(connection);
 		this.actions = Objects.requireNonNull(actions);
 		capeContent = new CapeWardrobeContent(capeRegistry, textureManager, selection);
+        this.outfitSource=Objects.requireNonNull(outfitSource);
+        outfitContent=new OutfitWardrobeContent(selection,outfitSource);
 		textureResolver = new ClientCapeTextureResolver(textureManager);
 		previewMetadata = capeContent.metadataEntries();
 		previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
@@ -84,31 +114,75 @@ public final class WardrobeScreen extends Screen {
 						&& ClientPlayNetworking.canSend(SetCapeSelectionPayload.TYPE),
 				event -> minecraft.options.keyInventory.matches(event),
 				ClientPlayNetworking::send,
-				() -> minecraft.gui.setScreen(null));
+				() -> minecraft.gui.setScreen(null),
+                () -> minecraft.getConnection()!=null && ClientPlayNetworking.canSend(SetFullFashionSelectionPayload.TYPE),
+                ClientPlayNetworking::send, ClientFullFashionNetworking::resultReceiverReady);
 	}
 
-	@Override
-	protected void init() {
-		layout = WardrobeLayout.calculate(Math.max(1, width), Math.max(1, height), font.lineHeight);
-		previewRotation.endDrag(WardrobePreviewRotation.PRIMARY_MOUSE_BUTTON);
-		applyButton = null;
-		capeContent.buildWidgets(layout, widget -> addRenderableWidget(widget), this::rebuildWidgets);
-		if (layout.fitsScreen()) {
-			addRenderableWidget(new CapeTabWidget(layout.tabBounds()));
-			addRenderableWidget(new WardrobePreviewModeButton(layout.previewModeButtonBounds(),
-					() -> previewMode, () -> previewMode = previewMode.next()));
-			var bounds = layout.applyButtonBounds();
-			applyButton = addRenderableWidget(Button.builder(APPLY, button -> applySelection())
-					.bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height()).build());
-		}
-		refreshSelection();
-	}
+    @Override
+    protected void init() {
+        rebuilding=true;
+        layout=WardrobeLayout.calculate(Math.max(1,width),Math.max(1,height),font.lineHeight);
+        previewRotation.endDrag(WardrobePreviewRotation.PRIMARY_MOUSE_BUTTON);
+        applyButton=null;reloadButton=null;focusKeys.clear();contentWidgetIndex=0;
+        observeAuthority();capeContent.refresh(playerFashions.state()==ClientPlayerFashionRegistry.State.UNAVAILABLE);outfitContent.refresh();
+        recoveryShown=selection.v2() && selection.hasError();renderedV2=selection.v2();
+        if (layout.fitsScreen()) {
+            for (SelectedTab tab:SelectedTab.values()) addControl(new TabWidget(layout.tabBounds(tab.ordinal()),tab),"tab:"+tab);
+            addControl(new WardrobePreviewModeButton(layout.previewModeButtonBounds(),() -> previewMode,
+                    () -> previewMode=previewMode.next()),"preview");
+            if (selectedTab==SelectedTab.CAPE) capeContent.buildWidgets(layout,this::addContentControl,this::rebuildPreservingFocus);
+            else outfitContent.buildWidgets(layout,font,this::addContentControl,this::rebuildPreservingFocus);
+            if (recoveryShown) {
+                var b=layout.reloadButtonBounds();
+                reloadButton=addControl(Button.builder(Component.literal("重新加载"),button -> reloadAuthority())
+                        .bounds(b.x(),b.y(),b.width(),b.height()).build(),"reload");
+            }
+            var b=layout.applyButtonBounds();
+            applyButton=addControl(Button.builder(APPLY,button -> applySelection()).bounds(b.x(),b.y(),b.width(),b.height()).build(),"apply");
+        }
+        rebuilding=false;refreshSelection();restoreFocus();
+    }
+    private <T extends AbstractWidget> T addControl(T widget,String key) {
+        if (widget instanceof CapeGridEntryWidget cape) cape.useScreenTooltip();
+        if (widget instanceof WardrobePreviewModeButton preview) preview.useScreenTooltip();
+        focusKeys.put(widget,key);return addRenderableWidget(widget);
+    }
+    private void addContentControl(AbstractWidget widget) {
+        String key=widget instanceof OutfitGridEntryWidget entry?"outfit:"+entry.id().value():
+                selectedTab+":"+outfitContent.panel()+":"+contentWidgetIndex;
+        contentWidgetIndex++;addControl(widget,key);
+    }
+    private void rememberFocus() {
+        if (getFocused() instanceof AbstractWidget widget && focusKeys.containsKey(widget)) {
+            rememberedFocus=focusKeys.get(widget);
+            if (rememberedFocus.startsWith(selectedTab+":") || rememberedFocus.startsWith("outfit:")) tabFocus.put(selectedTab,rememberedFocus);
+        }
+    }
+    private void restoreFocus() {
+        var wanted=focusKeys.entrySet().stream().filter(entry -> entry.getValue().equals(rememberedFocus)
+                && entry.getKey().visible && entry.getKey().active).findFirst();
+        if (wanted.isPresent()) { setFocused(wanted.orElseThrow().getKey());return; }
+        String fallback=rememberedFocus==null?"tab:"+selectedTab:selectedTab+":"+outfitContent.panel()+":0";
+        focusKeys.entrySet().stream().filter(entry -> entry.getValue().equals(fallback) && entry.getKey().visible && entry.getKey().active)
+                .findFirst().ifPresent(entry -> setFocused(entry.getKey()));
+    }
+    private void rebuildPreservingFocus() { rememberFocus();rebuildWidgets(); }
+    @Override public void resize(int width,int height) { rememberFocus();super.resize(width,height); }
+    void selectTab(SelectedTab tab) {
+        if (selectedTab==tab) return;
+        rememberFocus();selectedTab=tab;outfitContent.closePanel();
+        // 只在真实页签变化时转向；init／resize 和预览模式切换均保留手动朝向。
+        previewRotation.orientTo(tab==SelectedTab.CAPE
+                ? WardrobePreviewRotation.BACK_FACING_YAW_DEGREES : WardrobePreviewRotation.FRONT_FACING_YAW_DEGREES);
+        rememberedFocus=tabFocus.getOrDefault(tab,tab+":"+OutfitWardrobeContent.Panel.GRID+":0");rebuildWidgets();
+    }
+    void reloadAuthority() { observeAuthority();if (selection.reloadAuthority()) rebuildPreservingFocus(); }
+    OutfitWardrobeContent outfitContent() { return outfitContent; }
 
 	@Override
 	protected void setInitialFocus() {
-		if (minecraft != null) {
-			super.setInitialFocus();
-		}
+        restoreFocus();
 	}
 
 	@Override
@@ -119,14 +193,26 @@ public final class WardrobeScreen extends Screen {
 	}
 
 	private void observeAuthority() {
-		selection.observe(playerFashions.selfAuthority(self), playerFashions.state());
+        if (!requests.matchesConnection(connection) && !playerFashions.fullRequests().matches(connection)) {
+            if (selection.v2()) selection.observeFull(Optional.empty(),ClientPlayerFashionRegistry.State.UNINITIALIZED);
+            else selection.observe(Optional.empty(),ClientPlayerFashionRegistry.State.UNINITIALIZED);
+            selection.connectionOutstanding(true);return;
+        }
+        if (playerFashions.route()==FashionAuthorityRoute.V2) selection.observeFull(playerFashions.fullSelfAuthority(self),playerFashions.state());
+        else selection.observe(playerFashions.selfAuthority(self),playerFashions.state());
+        selection.connectionOutstanding(hasOutstanding());
 	}
 
 	private boolean canSendSelection() {
-		return requests.matchesConnection(connection) && actions.channelSupported().getAsBoolean();
+		return playerFashions.route()==FashionAuthorityRoute.V2
+                ? playerFashions.fullRequests().matches(connection) && actions.fullChannelSupported().getAsBoolean()
+                : requests.matchesConnection(connection) && actions.channelSupported().getAsBoolean();
 	}
 
-	private void refreshSelection() {
+	private boolean hasOutstanding() {
+        return playerFashions.route()==FashionAuthorityRoute.V2?playerFashions.fullRequests().hasOutstanding():requests.hasOutstanding();
+    }
+    private void refreshSelection() {
 		observeAuthority();
 		boolean changed = capeContent.refresh(
 				playerFashions.state() == ClientPlayerFashionRegistry.State.UNAVAILABLE);
@@ -135,31 +221,54 @@ public final class WardrobeScreen extends Screen {
 			previewMetadata = capeContent.metadataEntries();
 			previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
 		}
-		if (changed && layout != null) {
-			rebuildWidgets();
-		}
+        changed|=outfitContent.refresh();
+        boolean recovery=selection.v2() && selection.hasError();
+        if ((changed || recovery!=recoveryShown || renderedV2!=selection.v2()) && layout!=null && !rebuilding) { rebuildPreservingFocus();return; }
+        if (reloadButton!=null) reloadButton.active=selection.canEdit();
 		if (applyButton != null) {
-			applyButton.active = selection.canFinish(canSendSelection(), requests.hasOutstanding(),
-					capeContent::hasMetadata);
+			applyButton.active = canApply();
 		}
 	}
 
-	void applySelection() {
+    boolean canApply() {
+        return selection.v2()?selection.canFinishFull(canSendSelection(),actions.resultReceiverReady().getAsBoolean(),
+                hasOutstanding(),capeContent::hasMetadata,outfitSource::admitted):
+                selection.canFinish(canSendSelection(),hasOutstanding(),capeContent::hasMetadata);
+    }
+
+    void applySelection() {
 		refreshSelection();
-		var decision = selection.finish(requests, canSendSelection(), capeContent::hasMetadata);
-		decision.request().ifPresent(actions.send());
+		if (playerFashions.route()==FashionAuthorityRoute.V2) {
+            selection.finishFull(playerFashions.fullRequests(),canSendSelection(),actions.resultReceiverReady().getAsBoolean(),
+                    capeContent::hasMetadata,outfitSource::admitted).ifPresent(actions.fullSend());
+        } else {
+            var decision = selection.finish(requests, canSendSelection(), capeContent::hasMetadata);
+            decision.request().ifPresent(actions.send());
+        }
 		refreshSelection();
 	}
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+        keyboardInput=true;tooltipState.dismiss();
 		// 优先关闭，防止 Inventory 被重绑定到 Enter/Space 时误触应用。
 		if (event.isEscape() || actions.inventoryKey().test(event)) {
 			onClose();
 			return true;
 		}
-		return super.keyPressed(event);
-	}
+        if (event.isSelection() && getFocused() instanceof AbstractButton button && button.active && button.visible) {
+            if (minecraft!=null) button.playDownSound(minecraft.getSoundManager());
+            button.onPress(event);refreshSelection();return true;
+        }
+        if (event.key()==258) {
+            var controls=focusKeys.keySet().stream().filter(widget -> widget.visible && widget.active).toList();
+            if (controls.isEmpty()) return false;
+            int current=controls.indexOf(getFocused()),step=(event.modifiers()&1)!=0?-1:1;
+            int next=current<0?(step>0?0:controls.size()-1):Math.floorMod(current+step,controls.size());
+            setFocused(controls.get(next));return true;
+        }
+        return super.keyPressed(event);
+    }
 
 	@Override
 	public void onClose() {
@@ -198,13 +307,20 @@ public final class WardrobeScreen extends Screen {
 	}
 
 	WardrobeStatusText statusText() {
-		return WardrobeStatusText.create(selection, playerFashions.state(), canSendSelection(),
-				requests.hasOutstanding(), capeContent::hasMetadata, capeContent.state(), capeContent.status());
+        if (selectedTab==SelectedTab.CAPE) return WardrobeStatusText.create(selection,playerFashions.state(),canSendSelection(),
+                hasOutstanding(),capeContent::hasMetadata,capeContent.state(),capeContent.status());
+        var priority=WardrobeStatusText.Priority.NORMAL;
+        String detail=outfitContent.resourceStatus();
+        if (selection.hasError()) { priority=WardrobeStatusText.Priority.ERROR;detail=selection.status(canSendSelection(),hasOutstanding(),capeContent::hasMetadata); }
+        else if (selection.waiting()) { priority=WardrobeStatusText.Priority.PENDING;detail=selection.pendingStatus(); }
+        else if (!selection.authorityKnown()) { priority=WardrobeStatusText.Priority.LOADING;detail="时装状态当前不可用"; }
+        else if (!canSendSelection() || (selection.v2() && !actions.resultReceiverReady().getAsBoolean())) { priority=WardrobeStatusText.Priority.ERROR;detail="服务器不支持保存时装选择"; }
+        return new WardrobeStatusText(priority,outfitContent.scope().label+"："+outfitContent.summary(),detail,selection.supplementalStatus());
 	}
 
 	@Override
 	public Component getNarrationMessage() {
-		return Component.literal("衣柜，披风。当前预览："
+		return Component.literal("衣柜，"+selectedTab.label+"。当前预览："
 				+ (previewMode == WardrobePreviewMode.CAPE ? "披风。" : "鞘翅。")
 				+ statusText().narration());
 	}
@@ -216,12 +332,13 @@ public final class WardrobeScreen extends Screen {
 			return;
 		}
 		// Frame 与 selected seam 由同一几何入口计算并绘制。
-		WardrobeGuiPainter.frameWithSelectedCapeTab(graphics::fill, layout);
-		WardrobeGuiPainter.capeIcon(graphics::fill, layout.tabIconBounds());
+        WardrobeGuiPainter.frameWithTabs(graphics::fill,layout,selectedTab.ordinal());
 		WardrobeGuiPainter.previewFrame(graphics::fill, layout);
-		for (int index = 0; index < WardrobeCapeCatalog.PAGE_SIZE; index++) {
-			WardrobeGuiPainter.slot(graphics::fill, layout.entryBounds(index));
-		}
+        if (selectedTab==SelectedTab.CAPE) {
+            for (int index=0;index<12;index++) WardrobeGuiPainter.slot(graphics::fill,layout.entryBounds(index));
+        } else if (selection.v2() && outfitContent.panel()==OutfitWardrobeContent.Panel.GRID) {
+            for (int index=0;index<8;index++) WardrobeGuiPainter.slot(graphics::fill,layout.outfitEntryBounds(index));
+        }
 		extractPlayerPreview(graphics, mouseY);
 	}
 
@@ -235,26 +352,70 @@ public final class WardrobeScreen extends Screen {
 		}
 		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 		graphics.text(font, title, layout.titleX(), layout.titleY(), WardrobeGuiPainter.TEXT_COLOR, false);
-		if (capeContent.paginationVisible()) {
-			String page = capeContent.pageNumber() + " / " + capeContent.pageCount();
+        if (selectedTab==SelectedTab.CAPE?capeContent.paginationVisible():outfitContent.paginationVisible()) {
+            String page=selectedTab==SelectedTab.CAPE?capeContent.pageNumber()+" / "+capeContent.pageCount():
+                    outfitContent.pageNumber()+" / "+outfitContent.pageCount();
 			graphics.text(font, page, layout.paginationBounds().centerX() - font.width(page) / 2,
 					layout.pageLabelY(), WardrobeGuiPainter.TEXT_COLOR, false);
 		}
-		var bounds = layout.statusBounds();
+        if (selectedTab==SelectedTab.OUTFIT && (!selection.v2() || outfitSource.entries().isEmpty())) {
+            var area=selection.v2()?layout.outfitGridBounds():layout.gridBounds();
+            drawWrapped(graphics,outfitContent.resourceStatus(),area);
+        }
+        var bounds = layout.statusBounds();
 		var status = statusText();
 		var display = status.clip(bounds.width(), font::width);
 		graphics.enableScissor(bounds.x(), bounds.y(), bounds.right(), bounds.bottom());
 		graphics.text(font, display.firstLine(), bounds.x(), bounds.y(), WardrobeGuiPainter.TEXT_COLOR, false);
 		graphics.text(font, display.secondLine(), bounds.x(), bounds.y() + 10, WardrobeGuiPainter.TEXT_COLOR, false);
 		graphics.disableScissor();
-		if (bounds.contains(mouseX, mouseY)) {
-			List<Component> lines = status.fullText().stream().map(Component::literal)
-					.map(component -> (Component) component).toList();
-			graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
-		}
-	}
+        AbstractWidget target=keyboardInput && getFocused() instanceof AbstractWidget focused?focused:
+                focusKeys.keySet().stream().filter(widget -> widget.visible && widget.isMouseOver(mouseX,mouseY)).findFirst().orElse(null);
+        String targetKey=target==null?(!keyboardInput && bounds.contains(mouseX,mouseY)?"status":null):focusKeys.get(target);
+        tooltipAnchorX=keyboardInput && target!=null?target.getX()+target.getWidth()/2:mouseX;
+        tooltipAnchorY=keyboardInput && target!=null?target.getY()+target.getHeight()/2:mouseY;
+        if (tooltipState.visible(targetKey,keyboardInput,System.nanoTime())) {
+            List<String> lines=List.of();
+            if ("status".equals(targetKey)) lines=status.fullText();
+            else if (target instanceof OutfitGridEntryWidget entry) lines=outfitContent.tooltip(entry.id());
+            else if (target instanceof CapeGridEntryWidget entry) lines=List.of(entry.tooltipText());
+            else if (target instanceof WardrobePreviewModeButton) lines=List.of(target.getMessage().getString());
+            else if (target==reloadButton && reloadButton!=null) lines=List.of("重新加载最新权威","丢弃全部未提交的披风与装束草稿");
+            else if (target==applyButton && !applyButton.active) lines=List.of(selection.dirty()?
+                    (status.secondLine().isEmpty()?"新选择资源尚未就绪":status.secondLine()):"没有新的修改");
+            else if (target!=null && selectedTab==SelectedTab.OUTFIT && layout.scopeButtonBounds().contains(target.getX(),target.getY())
+                    && outfitContent.panel()==OutfitWardrobeContent.Panel.GRID) lines=outfitContent.summaryTooltip();
+            else if (target!=null) lines=List.of(target.getMessage().getString());
+            if (!lines.isEmpty()) boundedTooltip(graphics,lines);
+        }
+    }
 
-	WardrobePreviewAppearance previewAppearance() {
+    private void drawWrapped(GuiGraphicsExtractor graphics,String text,WardrobeLayout.Bounds area) {
+        var lines=font.split(Component.literal(text),area.width()-6);
+        int y=area.y()+4;
+        for (var line:lines) {
+            if (y+font.lineHeight>area.bottom()) break;
+            graphics.text(font,line,area.x()+3,y,WardrobeGuiPainter.TEXT_COLOR,false);y+=font.lineHeight;
+        }
+    }
+    private void boundedTooltip(GuiGraphicsExtractor graphics,List<String> text) {
+        var bounds=layout.tooltipBounds();
+        var lines=new ArrayList<net.minecraft.util.FormattedCharSequence>();
+        for (String line:text) lines.addAll(font.split(Component.literal(line),bounds.width()-8));
+        int capacity=(bounds.height()-8)/font.lineHeight;
+        if (lines.size()>capacity) {
+            lines.clear();
+            for (String line:text) lines.add(Component.literal(WardrobeStatusText.fit(line,bounds.width()-8,font::width)).getVisualOrderText());
+        }
+        var bounded=List.copyOf(lines.subList(0,Math.min(capacity,lines.size())));
+        graphics.setTooltipForNextFrame(font,bounded,(screenWidth,screenHeight,x,y,tipWidth,tipHeight) ->
+                {
+                    var placed=layout.tooltipPlacement(tooltipAnchorX,tooltipAnchorY,tipWidth,tipHeight);
+                    return new org.joml.Vector2i(placed.x(),placed.y());
+                },tooltipAnchorX,tooltipAnchorY,true);
+    }
+
+    WardrobePreviewAppearance previewAppearance() {
 		return previewAppearanceResolver.resolve(selection.previewSelection());
 	}
 
@@ -268,10 +429,11 @@ public final class WardrobeScreen extends Screen {
 			extractPreviewMessage(graphics, bounds, "时装状态正在同步");
 			return;
 		}
-		var appearance = previewAppearance();
+        var fullPreview=selection.previewDraft();
+        var appearance=fullPreview.map(value -> previewAppearanceResolver.resolve(value.cape())).orElseGet(this::previewAppearance);
 		if (!previewRenderer.extract(graphics, bounds, layout.previewEntitySize(),
 				PLAYER_PREVIEW_OFFSET_Y, mouseY, previewRotation.yawDegrees(), minecraft.player, appearance,
-				previewMode)) {
+                previewMode,fullPreview,outfitSource)) {
 			extractPreviewMessage(graphics, bounds, PREVIEW_UNAVAILABLE);
 		}
 	}
@@ -284,13 +446,17 @@ public final class WardrobeScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        keyboardInput=false;tooltipState.dismiss();
 		// Widget 先处理命中；旋转区还在几何上排除预览模式按钮和边框。
 		if (super.mouseClicked(event, doubleClick)) {
+            if (getFocused()!=null && !children().contains(getFocused())) restoreFocus();
 			return true;
 		}
 		return layout != null && layout.fitsScreen() && previewRotation.beginDrag(
 				event.x(), event.y(), event.button(), layout.previewDragBounds());
 	}
+
+    @Override public void mouseMoved(double x,double y) { keyboardInput=false;super.mouseMoved(x,y); }
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
@@ -313,33 +479,40 @@ public final class WardrobeScreen extends Screen {
 		return false;
 	}
 
-	enum SelectedTab { CAPE }
+	enum SelectedTab {
+        CAPE("披风"),OUTFIT("装束");
+        final String label;SelectedTab(String label) { this.label=label; }
+    }
 
 	record Actions(BooleanSupplier channelSupported, Predicate<KeyEvent> inventoryKey,
-			Consumer<SetCapeSelectionPayload> send, Runnable close) {
+			Consumer<SetCapeSelectionPayload> send, Runnable close, BooleanSupplier fullChannelSupported, Consumer<SetFullFashionSelectionPayload> fullSend, BooleanSupplier resultReceiverReady) {
+        Actions(BooleanSupplier channelSupported,Predicate<KeyEvent> inventoryKey,Consumer<SetCapeSelectionPayload> send,Runnable close,
+                BooleanSupplier fullChannelSupported,Consumer<SetFullFashionSelectionPayload> fullSend) {
+            this(channelSupported,inventoryKey,send,close,fullChannelSupported,fullSend,() -> true);
+        }
+        Actions(BooleanSupplier channelSupported, Predicate<KeyEvent> inventoryKey, Consumer<SetCapeSelectionPayload> send, Runnable close) {
+            this(channelSupported,inventoryKey,send,close,() -> false,request -> { });
+        }
 		Actions {
 			Objects.requireNonNull(channelSupported);
 			Objects.requireNonNull(inventoryKey);
 			Objects.requireNonNull(send);
 			Objects.requireNonNull(close);
+            Objects.requireNonNull(fullChannelSupported); Objects.requireNonNull(fullSend);
 		}
 	}
 
-	/** 唯一已选类别仍使用 Vanilla 的焦点、Tooltip 和旁白生命周期。 */
-	private static final class CapeTabWidget extends AbstractWidget {
-		CapeTabWidget(WardrobeLayout.Bounds bounds) {
-			super(bounds.x(), bounds.y(), bounds.width(), bounds.height(), CAPE_TAB);
-			setTooltip(Tooltip.create(CAPE_TAB));
-		}
-
-		@Override
-		protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-			// 像素几何已与主框一并绘制；没有第二套接缝或按钮底图。
-		}
-
-		@Override
-		protected void updateWidgetNarration(NarrationElementOutput output) {
-			output.add(NarratedElementType.TITLE, "披风，已选择");
-		}
-	}
+    private final class TabWidget extends AbstractButton {
+        private final SelectedTab tab;
+        TabWidget(WardrobeLayout.Bounds b,SelectedTab tab) {
+            super(b.x(),b.y(),b.width(),b.height(),Component.literal(tab.label));this.tab=tab;
+        }
+        @Override public void onPress(InputWithModifiers input) { if (visible && active) selectTab(tab); }
+        @Override protected void extractContents(GuiGraphicsExtractor graphics,int x,int y,float tick) {
+            if (isHoveredOrFocused()) graphics.fill(getX()+4,getY()+3,getX()+getWidth()-4,getY()+4,0xffffffff);
+        }
+        @Override protected void updateWidgetNarration(NarrationElementOutput output) {
+            output.add(NarratedElementType.TITLE,tab.label+(selectedTab==tab?"，已选择":"，切换分类"));
+        }
+    }
 }

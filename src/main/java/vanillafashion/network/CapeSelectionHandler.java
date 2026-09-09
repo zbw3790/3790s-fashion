@@ -15,7 +15,12 @@ public final class CapeSelectionHandler {
 
 	public static Optional<Outcome> process(UUID sender, SetCapeSelectionPayload request,
 			Optional<PlayerFashionService> service, boolean resultSupported, boolean synchronizationAvailable) {
-		if (!resultSupported) {
+        return process(sender, request, service, vanillafashion.fashion.FashionAuthorityRoute.LEGACY, resultSupported, synchronizationAvailable);
+    }
+    public static Optional<Outcome> process(UUID sender, SetCapeSelectionPayload request,
+            Optional<PlayerFashionService> service, vanillafashion.fashion.FashionAuthorityRoute route, boolean resultSupported, boolean synchronizationAvailable) {
+        if (route!=vanillafashion.fashion.FashionAuthorityRoute.LEGACY) return Optional.empty();
+        if (!resultSupported) {
 			return Optional.empty();
 		}
 		var mutation = synchronizationAvailable && service.isPresent()

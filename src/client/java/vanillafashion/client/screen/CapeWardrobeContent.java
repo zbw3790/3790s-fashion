@@ -114,7 +114,7 @@ final class CapeWardrobeContent {
 			var widget = new CapeGridEntryWidget(layout.entryBounds(index), () -> modelFor(entry),
 					() -> selection.authorityKnown() && entry.capeId().equals(selection.draft()),
 					selection::canEdit,
-					() -> selection.authorityKnown() && !selection.closed() && selection.pendingRequestId() != 0,
+					() -> selection.authorityKnown() && !selection.closed() && selection.waiting(),
 					() -> select(entry));
 			widgets.add(widget);
 			add.accept(widget);

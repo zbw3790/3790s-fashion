@@ -4,7 +4,9 @@
 
 | 客户端 | 服务器 | 行为 |
 | --- | --- | --- |
-| 安装 Vanilla Fashion | 安装 Vanilla Fashion | 提供完整衣柜、资产同步、玩家选择与多人外观同步 |
+| v0.3.0 | v0.3.0 | 提供 Cape＋六部位 Outfit 衣柜、统一应用、资产与多人外观同步 |
+| v0.3.0 | v0.2.1 | 正常加入并使用旧 Cape 路由；Outfit 页签显示不支持，不能编辑装束 |
+| v0.2.1 | v0.3.0 | 正常加入并使用 Cape；不显示或编辑 Outfit，Cape 修改保留服务器已有装束 |
 | 安装 Vanilla Fashion | 原版 Minecraft 26.2 | 正常加入；不打开衣柜、不发送本 Mod 请求、不覆盖原版外观 |
 | 原版 Minecraft 26.2 | 安装 Vanilla Fashion | 正常加入；服务器不会向该连接发送不支持的自定义 Payload |
 | 原版 Minecraft 26.2 | 原版 Minecraft 26.2 | 与本项目无关 |
@@ -29,6 +31,10 @@
 
 ## 已知限制
 
-- v0.1 不支持 Cape Registry 热重载；资产变化需要重启服务器。
-- v0.1 不包含披风上传、审核、权限分配、云服务、HTTP API 或数据库。
+- Cape／Outfit 定义在服务器启动时加载；资产变化需要重启服务器。
+- 不提供资源上传、编辑、权限或 entitlement 系统，不包含 Elytra Slot 附属或 Armor Visual。
 - Elytra 纹理属于 Cape Cosmetic 的绑定资源，不是独立时装槽。
+
+## 保存兼容
+
+v0.3.0 读取 v0.2.1 的 schema v1 保存；实际修改时写入同时包含 Cape 和六部位 Outfit 的 schema v2。仅加载旧保存不会立即迁移。旧版 Mod 不能反向读取 v2 保存，升级前应备份世界。
