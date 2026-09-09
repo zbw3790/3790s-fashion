@@ -11,7 +11,6 @@ import vanillafashion.cape.CapeRegistryService;
 import vanillafashion.fashion.PlayerFashionLifecycle;
 import vanillafashion.fashion.PlayerFashionService;
 import vanillafashion.network.VanillaFashionNetworking;
-import vanillafashion.wardrobe.WardrobeInteractionHandler;
 import vanillafashion.wardrobe.WardrobeServerAvailability;
 
 public final class VanillaFashion implements ModInitializer {
@@ -27,8 +26,7 @@ public final class VanillaFashion implements ModInitializer {
 	public void onInitialize() {
 		VanillaFashionNetworking.register(CAPE_REGISTRY_SERVICE, LOGGER);
 		PLAYER_FASHION_LIFECYCLE.register();
-		WardrobeInteractionHandler.register(WARDROBE_SERVER_AVAILABILITY, LOGGER);
-		LOGGER.info("Vanilla Fashion 通用端初始化完成，双向资产协议、服务器生命周期与衣柜交互回调已注册。");
+		LOGGER.info("Vanilla Fashion 通用端初始化完成，双向资产协议、服务器生命周期已注册；衣柜通过原版交互返回点接入。");
 	}
 
 	public static CapeRegistry currentCapeRegistry() {

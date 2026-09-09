@@ -17,6 +17,7 @@ public final class PlayerFashionService {
     private CapeRegistryKnowledge registry;
     private Optional<OutfitRegistryLoadResult> outfits = Optional.empty();
     private boolean stopped;
+    private long registryGeneration;
 
     public PlayerFashionService(PlayerFashionPersistence.LoadResult loaded, CapeRegistryKnowledge registry) {
         this(loaded, registry, (playerId, capeId) -> true);
@@ -120,8 +121,9 @@ public final class PlayerFashionService {
         data.setState(id, next);
         if (member != null) member.state = updated;
     }
-    private boolean active(OutfitId id, OutfitPart part) {
-        if (outfits.isEmpty()) return false; var knowledge = outfits.orElseThrow().knowledge();
+    private boolean active(OutfitId id, OutfitPart part) { return active(outfits, id, part); }
+    private static boolean active(Optional<OutfitRegistryLoadResult> source, OutfitId id, OutfitPart part) {
+        if (source.isEmpty()) return false; var knowledge = source.orElseThrow().knowledge();
         return knowledge.trustworthy() && knowledge.metadataTrusted(id) && knowledge.partDeclared(id, part)
                 && OutfitModel.CANONICAL_ORDER.stream().anyMatch(model -> knowledge.modelDeclared(id, model) && knowledge.modelValid(id, model));
     }
@@ -160,6 +162,46 @@ public final class PlayerFashionService {
         }
         return new ReconciliationResult(cleared, dormant);
     }
+    public long registryGeneration() { return registryGeneration; }
+    /** 先计算全部变更再提交；不扫描、删除或重新派生 Cape 领域。 */
+    public OutfitReloadCommit reloadOutfits(OutfitRegistryLoadResult candidate) {
+        Objects.requireNonNull(candidate);
+        if (!candidate.knowledge().trustworthy() || !writable()) return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE, List.of(), 0);
+        if (outfits.isPresent() && OutfitRegistrySnapshot.from(outfits.orElseThrow()).equals(OutfitRegistrySnapshot.from(candidate))
+                && outfits.orElseThrow().knowledge().knownExistingIds().equals(candidate.knowledge().knownExistingIds()))
+            return new OutfitReloadCommit(ReloadStatus.NO_CHANGE, List.of(), 0);
+        if (registryGeneration==Long.MAX_VALUE || online.size()>FullPlayerFashionSnapshot.MAX_PLAYERS)
+            return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE, List.of(), 0);
+        var storedChanges=new LinkedHashMap<UUID,PlayerFashionStoredState>();
+        var authorities=new ArrayList<FullPlayerFashionEntry>();
+        var ids=new TreeSet<>(data.storedSnapshot().keySet()); ids.addAll(online.keySet());
+        for (UUID id:ids) {
+            var old=stored(id); var selected=old.outfit();
+            for (OutfitPart part:OutfitPart.CANONICAL_ORDER)
+                if (selected.get(part) instanceof OutfitPartSelection.Outfit value && candidate.knowledge().isDefinitelyAbsent(value.id()))
+                    selected=selected.with(part,OutfitPartSelection.ORIGINAL);
+            var next=new PlayerFashionStoredState(old.cape(),selected);
+            if (!next.equals(old)) storedChanges.put(id,next);
+            var member=online.get(id);
+            if (member==null) continue;
+            var effectiveOutfit=selected;
+            for (OutfitPart part:OutfitPart.CANONICAL_ORDER)
+                if (selected.get(part) instanceof OutfitPartSelection.Outfit value && !active(Optional.of(candidate),value.id(),part))
+                    effectiveOutfit=effectiveOutfit.with(part,OutfitPartSelection.ORIGINAL);
+            var resolved=new PlayerFashionEffectiveState(member.state.effective().cape(),effectiveOutfit);
+            if (!member.state.stored().equals(next) || !member.state.effective().equals(resolved)) {
+                if (exhausted(id)) return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE,List.of(),0);
+                authorities.add(new FullPlayerFashionEntry(id,new FullPlayerFashionState(next,resolved,member.state.revision()+1)));
+            }
+        }
+        // 此处之后没有扫描或用户回调；由同一服务器线程完成可见状态替换。
+        outfits=Optional.of(candidate); registryGeneration++;
+        storedChanges.forEach(data::setState);
+        authorities.forEach(entry -> online.get(entry.playerId()).state=entry.state());
+        return new OutfitReloadCommit(ReloadStatus.COMMITTED,List.copyOf(authorities),storedChanges.size());
+    }
+    public enum ReloadStatus { COMMITTED, NO_CHANGE, UNAVAILABLE }
+    public record OutfitReloadCommit(ReloadStatus status, List<FullPlayerFashionEntry> authorities, int storedChanges) { }
     public void stop() { stopped = true; online.clear(); outfits = Optional.empty(); }
     private static final class Membership {
         private final Object connection; private FullPlayerFashionState state;

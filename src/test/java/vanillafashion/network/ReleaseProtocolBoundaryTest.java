@@ -78,15 +78,15 @@ class ReleaseProtocolBoundaryTest {
 
     @Test
     void v2AndCombinedExactSetsMatchActualRegistration() throws Exception {
-        var newS2c=Set.of(OutfitRegistrySnapshotPayload.TYPE,OutfitAssetDataPayload.TYPE,FullPlayerFashionSnapshotPayload.TYPE,
+        var newS2c=Set.of(OutfitRegistryRefreshPayload.TYPE,OutfitRegistrySnapshotPayload.TYPE,OutfitAssetDataPayload.TYPE,FullPlayerFashionSnapshotPayload.TYPE,
                 FullPlayerFashionUpdatePayload.TYPE,FullPlayerFashionRemovePayload.TYPE,FullFashionSelectionResultPayload.TYPE);
         var newC2s=Set.of(OutfitAssetRequestPayload.TYPE,SetFullFashionSelectionPayload.TYPE);
-        assertEquals(Set.of("outfit_registry_snapshot","outfit_asset_data","full_player_fashion_snapshot","full_player_fashion_update","full_player_fashion_remove","full_fashion_selection_result"),newS2c.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(Set.of("outfit_registry_refresh","outfit_registry_snapshot","outfit_asset_data","full_player_fashion_snapshot","full_player_fashion_update","full_player_fashion_remove","full_fashion_selection_result"),newS2c.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
         assertEquals(Set.of("outfit_asset_request","set_full_fashion_selection"),newC2s.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
         java.util.Set<String> expectedS=new java.util.HashSet<>(),expectedC=new java.util.HashSet<>();
         java.util.stream.Stream.concat(S2C.stream(),newS2c.stream()).forEach(t->expectedS.add(t.id().getPath()));
         java.util.stream.Stream.concat(C2S.stream(),newC2s.stream()).forEach(t->expectedC.add(t.id().getPath()));
-        assertEquals(14,expectedS.size());assertEquals(4,expectedC.size());
+        assertEquals(15,expectedS.size());assertEquals(4,expectedC.size());
         Path root=Path.of(System.getProperty("user.dir")).toAbsolutePath();while(!java.nio.file.Files.exists(root.resolve("settings.gradle")))root=root.getParent();
         String source=java.nio.file.Files.readString(root.resolve("src/main/java/vanillafashion/network/VanillaFashionNetworking.java"))+java.nio.file.Files.readString(root.resolve("src/main/java/vanillafashion/network/PlayerFashionNetworking.java"));
         for(boolean clientbound:new boolean[]{true,false}){

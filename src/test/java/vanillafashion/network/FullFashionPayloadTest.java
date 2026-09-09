@@ -37,6 +37,7 @@ class FullFashionPayloadTest {
             new Sample("Remove",FullPlayerFashionRemovePayload.CODEC,new FullPlayerFashionRemovePayload(entry.playerId(),state.revision(),FullPlayerFashionRemovePayload.Reason.LEFT),25),
             new Sample("Result",FullFashionSelectionResultPayload.CODEC,new FullFashionSelectionResultPayload(3,FullFashionSelectionStatus.SUCCESS,Optional.of(state)),481),
             new Sample("Registry",OutfitRegistrySnapshotPayload.CODEC,new OutfitRegistrySnapshotPayload(new OutfitRegistrySnapshot(true,definitions)),33795),
+            new Sample("RegistryRefresh",OutfitRegistryRefreshPayload.CODEC,new OutfitRegistryRefreshPayload(maximum?Long.MAX_VALUE:1,new OutfitRegistrySnapshot(true,definitions)),33803),
             new Sample("Asset",OutfitAssetDataPayload.CODEC,new OutfitAssetDataPayload(hash(1),new byte[maximum?65536:8]),65571),
             new Sample("AssetRequest",OutfitAssetRequestPayload.CODEC,new OutfitAssetRequestPayload(IntStream.range(0,maximum?64:1).mapToObj(FullFashionPayloadTest::hash).toList()),2049),
             new Sample("Apply",SetFullFashionSelectionPayload.CODEC,new SetFullFashionSelectionPayload(2,state.revision(),state.stored()),478));
@@ -64,6 +65,9 @@ class FullFashionPayloadTest {
     @ParameterizedTest @ValueSource(ints={9,127,255}) void unknownResultStatusesRejected(int value){reject(FullFashionSelectionResultPayload.CODEC,b->{b.writeLong(1);b.writeByte(value);b.writeBoolean(false);});}
     @ParameterizedTest @ValueSource(ints={2,127,255}) void unknownRemoveReasonsRejected(int value){reject(FullPlayerFashionRemovePayload.CODEC,b->{b.writeUUID(new UUID(0,1));b.writeLong(0);b.writeByte(value);});}
     @ParameterizedTest @ValueSource(ints={-1,0}) void positiveRequestIdsRequired(long value){reject(SetFullFashionSelectionPayload.CODEC,b->{b.writeLong(value);b.writeLong(0);FashionWireCodec.stored(b,PlayerFashionStoredState.DEFAULT);});reject(FullFashionSelectionResultPayload.CODEC,b->{b.writeLong(value);b.writeByte(4);b.writeBoolean(false);});}
+    @Test void negativeRegistryGenerationRejected() {
+        reject(OutfitRegistryRefreshPayload.CODEC,b->{b.writeLong(-1); b.writeBoolean(true);b.writeVarInt(0);});
+    }
     @Test void negativeRevisionsRejected(){reject(SetFullFashionSelectionPayload.CODEC,b->{b.writeLong(1);b.writeLong(-1);FashionWireCodec.stored(b,PlayerFashionStoredState.DEFAULT);});reject(FullPlayerFashionUpdatePayload.CODEC,b->{b.writeUUID(new UUID(0,1));b.writeLong(-1);});}
     @ParameterizedTest @ValueSource(ints={1,2,4,8,16,32,64,128,255}) void defaultsCannotCarryActiveOrReservedBits(int mask){reject(FullPlayerFashionUpdatePayload.CODEC,b->{b.writeUUID(new UUID(0,1));b.writeLong(0);FashionWireCodec.stored(b,PlayerFashionStoredState.DEFAULT);b.writeByte(mask);});}
     @ParameterizedTest @CsvSource({"0,1,0","64,1,0","1,0,0","1,4,0","1,1,2","63,3,4"}) void invalidRegistryMasksRejected(int parts,int declared,int valid){reject(OutfitRegistrySnapshotPayload.CODEC,b->{b.writeBoolean(true);b.writeVarInt(1);b.writeUtf("valid");b.writeByte(parts);b.writeByte(declared);b.writeByte(valid);});}

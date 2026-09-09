@@ -22,7 +22,17 @@ public final class ClientOutfitAssetSync {
     public ClientOutfitRegistry.Result snapshot(Object connection, OutfitRegistrySnapshot snapshot) {
         if (!matches(connection)) return ClientOutfitRegistry.Result.STALE;
         var result=registry.replace(connection,snapshot);
+        return installed(connection, result);
+    }
+    public ClientOutfitRegistry.Result refresh(Object connection, long generation, OutfitRegistrySnapshot snapshot) {
+        if (!matches(connection)) return ClientOutfitRegistry.Result.STALE;
+        return installed(connection, registry.refresh(connection,generation,snapshot));
+    }
+    private ClientOutfitRegistry.Result installed(Object connection, ClientOutfitRegistry.Result result) {
         if (result==ClientOutfitRegistry.Result.CONFLICT) { store.clear(); pending.clear(); return result; }
+        if (result==ClientOutfitRegistry.Result.APPLIED) {
+            store.retain(registry.requiredHashes());pending.retainAll(registry.requiredHashes());
+        }
         if (result==ClientOutfitRegistry.Result.APPLIED) for (String hash:registry.requiredHashes()) {
             cache.findValidated(hash).ifPresent(bytes -> { if (matches(connection) && registry.requiredHashes().contains(hash)) store.store(hash,bytes); });
         }

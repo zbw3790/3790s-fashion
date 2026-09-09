@@ -1,83 +1,34 @@
 package vanillafashion.wardrobe;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.List;
-
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.world.InteractionResult;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 class WardrobeInteractionRulesTest {
-	@Test
-	void acceptsWhenEveryConditionMatches() {
-		assertTrue(WardrobeInteractionRules.matches(matchingInput()));
-	}
-
-	@Test
-	void rejectsNonArmorStand() {
-		assertFalse(WardrobeInteractionRules.matches(new WardrobeInteractionRules.Input(
-				false, true, true, false, true, true, true, true, true, true
-		)));
-	}
-
-	@Test
-	void rejectsOffHandInteraction() {
-		assertFalse(WardrobeInteractionRules.matches(new WardrobeInteractionRules.Input(
-				true, false, true, false, true, true, true, true, true, true
-		)));
-	}
-
-	@Test
-	void rejectsNonEmptyPlayerMainHand() {
-		assertFalse(WardrobeInteractionRules.matches(new WardrobeInteractionRules.Input(
-				true, true, false, false, true, true, true, true, true, true
-		)));
-	}
-
-	@Test
-	void rejectsSpectator() {
-		assertFalse(WardrobeInteractionRules.matches(new WardrobeInteractionRules.Input(
-				true, true, true, true, true, true, true, true, true, true
-		)));
-	}
-
-	@Test
-	void rejectsAnyOccupiedArmorStandSlot() {
-		List.of(
-				new WardrobeInteractionRules.Input(true, true, true, false, false, true, true, true, true, true),
-				new WardrobeInteractionRules.Input(true, true, true, false, true, false, true, true, true, true),
-				new WardrobeInteractionRules.Input(true, true, true, false, true, true, false, true, true, true),
-				new WardrobeInteractionRules.Input(true, true, true, false, true, true, true, false, true, true),
-				new WardrobeInteractionRules.Input(true, true, true, false, true, true, true, true, false, true),
-				new WardrobeInteractionRules.Input(true, true, true, false, true, true, true, true, true, false)
-		).forEach(input -> assertFalse(WardrobeInteractionRules.matches(input)));
-	}
-
-	@Test
-	void unsupportedServerAlwaysKeepsVanillaInteraction() {
-		assertEquals(
-				InteractionResult.PASS,
-				WardrobeInteractionHandler.clientPredictionResult(false, true)
-		);
-	}
-
-	@Test
-	void supportedServerConsumesOnlyMatchingCandidate() {
-		assertEquals(
-				InteractionResult.CONSUME,
-				WardrobeInteractionHandler.clientPredictionResult(true, true)
-		);
-		assertEquals(
-				InteractionResult.PASS,
-				WardrobeInteractionHandler.clientPredictionResult(true, false)
-		);
-	}
-
-	private static WardrobeInteractionRules.Input matchingInput() {
-		return new WardrobeInteractionRules.Input(
-				true, true, true, false, true, true, true, true, true, true
-		);
-	}
+    @Test void onlyArmorStandFinalPassAndNonSpectatorCanFallback() {
+        assertTrue(WardrobeInteractionRules.matches(true,false,InteractionResult.PASS));
+        assertFalse(WardrobeInteractionRules.matches(false,false,InteractionResult.PASS));
+        assertFalse(WardrobeInteractionRules.matches(true,true,InteractionResult.PASS));
+        for(var result:new InteractionResult[]{InteractionResult.SUCCESS,InteractionResult.SUCCESS_SERVER,InteractionResult.CONSUME,InteractionResult.FAIL})
+            assertFalse(WardrobeInteractionRules.matches(true,false,result));
+    }
+    @Test void clientConsumesWithoutCallingServerOpenAndWithoutItemOrSwingSideEffects() {
+        var result=WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,true,true,()->{fail("客户端不能发送开窗。");return false;});
+        assertTrue(result.consumesAction());assertEquals(InteractionResult.CONSUME.withoutItem(),result);
+    }
+    @Test void unsupportedServerLeavesVanillaPass() {
+        assertSame(InteractionResult.PASS,WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,true,false,()->{fail();return false;}));
+    }
+    @Test void serverSendsOnceAndConsumesOnlySuccessfulOpen() {
+        var opens=new AtomicInteger();assertTrue(WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,false,false,()->{opens.incrementAndGet();return true;}).consumesAction());
+        assertEquals(1,opens.get());assertSame(InteractionResult.PASS,WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,false,false,()->false));
+    }
+    @Test void consumedVanillaResultsAreNeverOpenedAgain() {
+        for(var result:new InteractionResult[]{InteractionResult.SUCCESS,InteractionResult.SUCCESS_SERVER,InteractionResult.CONSUME,InteractionResult.FAIL})
+            assertSame(result,WardrobeInteractionHandler.fallback(result,true,false,true,()->{fail("原版已处理结果不能开窗。");return false;}));
+    }
+    @Test void ineligibleTargetNeverCallsOpen() {
+        assertSame(InteractionResult.PASS,WardrobeInteractionHandler.fallback(InteractionResult.PASS,false,false,true,()->{fail();return false;}));
+    }
 }

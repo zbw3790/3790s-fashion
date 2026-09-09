@@ -16,7 +16,7 @@ public record OutfitRegistrySnapshotPayload(OutfitRegistrySnapshot snapshot) imp
     public static final StreamCodec<RegistryFriendlyByteBuf, OutfitRegistrySnapshotPayload> CODEC = StreamCodec.ofMember(OutfitRegistrySnapshotPayload::encode,
             buffer -> FashionWireCodec.decode(buffer, MAX_BODY_BYTES, OutfitRegistrySnapshotPayload::read));
     public OutfitRegistrySnapshotPayload { Objects.requireNonNull(snapshot); }
-    private void encode(RegistryFriendlyByteBuf b) { b.writeBoolean(snapshot.available()); b.writeVarInt(snapshot.entries().size());
+    void encode(RegistryFriendlyByteBuf b) { b.writeBoolean(snapshot.available()); b.writeVarInt(snapshot.entries().size());
         for (var entry : snapshot.entries()) {
             b.writeUtf(entry.id().value(), 64);
             int parts=0, declared=0, valid=0;
@@ -29,7 +29,7 @@ public record OutfitRegistrySnapshotPayload(OutfitRegistrySnapshot snapshot) imp
             b.writeByte(parts); b.writeByte(declared); b.writeByte(valid);
             for (OutfitModel model : OutfitModel.CANONICAL_ORDER) if (entry.validModels().containsKey(model)) FashionWireCodec.hash(b, entry.validModels().get(model));
         } }
-    private static OutfitRegistrySnapshotPayload read(RegistryFriendlyByteBuf b) { boolean available = FashionWireCodec.bool(b); int count = FashionWireCodec.count(b, 0, OutfitRegistrySnapshot.MAX_OUTFITS);
+    static OutfitRegistrySnapshotPayload read(RegistryFriendlyByteBuf b) { boolean available = FashionWireCodec.bool(b); int count = FashionWireCodec.count(b, 0, OutfitRegistrySnapshot.MAX_OUTFITS);
         if (!available && count != 0) throw new IllegalArgumentException("不可用 Registry 必须为空。");
         var entries = new ArrayList<OutfitRegistrySnapshot.Entry>(count);
         for (int index=0; index<count; index++) {

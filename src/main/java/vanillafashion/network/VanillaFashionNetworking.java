@@ -101,7 +101,7 @@ public final class VanillaFashionNetworking {
         // 普通离开和停服均由同一网络生命周期清理 Cape 连接预算。
 
 
-		logger.info("Vanilla Fashion 十四种 S2C、四种 C2S payload 与连接生命周期已注册。");
+		logger.info("Vanilla Fashion 玩家时装网络协议与连接生命周期已注册。");
 	}
 
 	private static void handleAssetRequest(

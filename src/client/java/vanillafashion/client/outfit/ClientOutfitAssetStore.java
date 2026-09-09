@@ -21,5 +21,6 @@ public final class ClientOutfitAssetStore {
     public Optional<byte[]> find(String hash) { var bytes=assets.get(CapeAssetHash.requireValid(hash,"装束内容 hash ")); return bytes==null?Optional.empty():Optional.of(bytes.clone()); }
     public boolean contains(String hash) { return assets.containsKey(hash); }
     public int size() { return assets.size(); }
+    public void retain(Set<String> required) { assets.keySet().retainAll(required); }
     public void clear() { assets.clear(); }
 }

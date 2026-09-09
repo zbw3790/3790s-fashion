@@ -6,17 +6,18 @@
 
 ## 安装需求
 
-- 当前已发布稳定版本：`v0.3.0`
+- 当前已发布稳定版本：`v0.3.1`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
 - Java：`25`；从源码构建需要 JDK 25
 
-客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `vanilla-fashion-0.3.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `vanilla-fashion-0.3.1.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
 
 ## 这个 Mod 能做什么
 
-- 把完全空置的原版盔甲架当作衣柜入口，不添加新方块或物品。
+- 把原版盔甲架当作衣柜入口：完整原版交互优先，没有原版动作时才打开衣柜，不要求空手或空架。
+- Outfit 支持 PNG-only 资源；服主可执行 `/vanillafashion reload` 手动热重载装束，新端无需重连或重新应用。
 - Creative Inventory 风格衣柜，支持 Standard / Compact 自适应布局、Cape／Outfit 两页签、4×3 披风列表和 4×2 装束列表。
 - Outfit 可替换头部、身体、左右袖和左右裤腿六个原版外层部位，支持 WIDE／SLIM；可按整套、分组或单部位选择，保留原版、隐藏外层或形成混搭。
 - 在带边框的深灰区域居中预览玩家，切换披风／鞘翅模型无需更换真实装备；支持“原版”选项和分页浏览，垂直跟随更平缓。
@@ -47,9 +48,11 @@ config/vanilla-fashion/capes/<cape-id>/
 
 ## 服主：添加装束
 
-装束由服主放在服务器本地的 `config/vanilla-fashion/outfits/<outfit-id>/`。每个目录包含 `outfit.json`，并按声明提供 `wide.png`、`slim.png` 中的一种或两种；不会自动把一种臂宽转换成另一种。
+装束由服主放在服务器本地的 `config/vanilla-fashion/outfits/<outfit-id>/`。v0.3.1 起 `outfit.json` 可选：最简单的目录只需 `wide.png`、`slim.png` 中的一种或两种；不会自动把一种臂宽转换成另一种。
 
-整套、两种模型的 metadata 示例：
+PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素，自动确定提供的部位；Base Skin 像素不参与识别。双模型的识别部位必须一致。存在 JSON 时仍使用严格显式模式，错误 JSON 不会改走自动模式；需要显式提供全透明部位时仍须 JSON。
+
+整套、两种模型的显式 metadata 示例：
 
 ```json
 {
@@ -59,14 +62,22 @@ config/vanilla-fashion/capes/<cape-id>/
 }
 ```
 
-局部装束只在 `parts` 列出提供的部位。图片须是遵循对应原版皮肤 UV 的 **64×64 PNG**，每张不超过 **65536 字节**；渲染只使用声明部位的外层，保留透明度，不替换基础皮肤。`outfit.json` 为 UTF-8，最多 **4096 字节**，使用上述三个字段；`parts` 和 `models` 必须非空，不重复、不使用未知值。添加或修改资源后需要重启服务器；不要在服务器扫描过程中修改资源目录。
+局部装束只在 `parts` 列出提供的部位。图片须是遵循对应原版皮肤 UV 的 **64×64 PNG**，每张不超过 **65536 字节**；渲染只使用声明部位的外层，保留透明度，不替换基础皮肤。`outfit.json` 为 UTF-8，最多 **4096 字节**，使用上述三个字段；`parts` 和 `models` 必须非空，不重复、不使用未知值。不要在服务器扫描过程中修改资源目录。
 
 未提供当前玩家模型的条目会显示为不适用，不能新选；暂不可用的已保存选择会保留并回退。衣柜不提供资源上传或编辑功能。
 
+添加、修改或删除 Outfit 后，管理员或服务器控制台可执行：
+
+```text
+/vanillafashion reload
+```
+
+v0.3.1 客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply；冻结 v0.3.0 客户端在线时继续使用加入时的资源视图，重连后获得最新目录。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
+
 ## 玩家：使用衣柜
 
-1. 找到一个头部、身体、腿、脚、主手和副手都没有物品的原版盔甲架。
-2. 保持玩家主手为空，使用主手右键盔甲架。
+1. 找到一个原版盔甲架，架子已有装备也可以使用。
+2. 右键盔甲架：先执行完整原版交互，没有原版动作时打开衣柜；普通无交互物品或无可执行原版动作的空手均可使用。放上、取下装备仍由原版优先处理，不会同时开衣柜。
 3. 在 Cape／Outfit 页签中浏览和选择；装束可设置整套、分组或详细部位，并使用“原版／无外层”。两页签的修改汇入同一草稿。右上按钮可切换披风／鞘翅，仅影响预览，不改变真实装备。
 4. 点击“应用”提交选择；服务器确认成功后保持同一衣柜窗口，可以继续选择和应用。
 5. 按 ESC 或当前物品栏绑定键（默认 E）关闭衣柜，会丢弃尚未应用的草稿。
@@ -78,9 +89,9 @@ config/vanilla-fashion/capes/<cape-id>/
 - 未安装本 Mod 的原版客户端可以进入安装了本 Mod 的服务器，但不能使用衣柜或显示自定义披风／装束。
 - 安装了本 Mod 的客户端可以进入原版服务器；此时不提供衣柜和服务器时装功能。
 
-v0.3.0 可读取 v0.2.1 的 schema v1 保存，仅发生实际保存修改时写入 schema v2；不要用旧版 Mod 反向读取 v2 保存。当前客户端连接 v0.2.1 服务器时，Cape 正常可用，Outfit 页签提示不支持；v0.2.1 客户端连接当前服务器时，其 Cape 修改不会清除已有装束。
+v0.3.1 继续使用 schema 2，直接兼容上一稳定版 v0.3.0 保存。v0.3.0 起可读取 v0.2.1 的 schema v1 保存，仅发生实际保存修改时写入 schema v2；不要用旧版 Mod 反向读取 v2 保存。当前客户端连接 v0.2.1 服务器时，Cape 正常可用，Outfit 页签提示不支持；v0.2.1 客户端连接当前服务器时，其 Cape 修改不会清除已有装束。
 
-资源定义在服务器启动时加载。当前不提供资源上传／编辑、权限／entitlement 或产品级热重载管理界面，不包含 Elytra Slot 附属或 Armor Visual。
+Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。上一版本 v0.3.0 的功能与制品保留在 [v0.3.0 Release](https://github.com/zbw3790/3790s-vanilla-style-fashion/releases/tag/v0.3.0)。
 
 详细的双向兼容行为见[兼容性说明](docs/compatibility.md)。
 
@@ -92,7 +103,7 @@ Windows PowerShell：
 .\gradlew.bat clean build --console=plain
 ```
 
-正式 Mod JAR 输出到 `build/libs/vanilla-fashion-0.3.0.jar`。
+正式 Mod JAR 输出到 `build/libs/vanilla-fashion-0.3.1.jar`。
 
 如需重建包含 README、许可证和 Cape 模板的完整发布 ZIP：
 

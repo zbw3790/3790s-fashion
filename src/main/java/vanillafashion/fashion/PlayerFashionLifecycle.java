@@ -60,6 +60,7 @@ public final class PlayerFashionLifecycle {
 		PlayerFashionPersistence.LoadResult loaded = PlayerFashionPersistence.load(storage, dataDirectory, logger);
 		PlayerFashionService service = new PlayerFashionService(loaded, knowledge);
 		var outfits = new vanillafashion.outfit.OutfitRegistryLoader(4096).load(capesRoot.resolveSibling("outfits"));
+		vanillafashion.outfit.OutfitDiagnostic.report(outfits.diagnostics(), logger);
 		PlayerFashionService.ReconciliationResult reconciled = service.reconcile(knowledge, outfits, entry -> { });
 		logger.info("Vanilla Fashion 装束 Registry：可信={}，定义={}，内容={}。", outfits.knowledge().trustworthy(), outfits.registry().size(), outfits.assets().size());
 		services.put(storage, service);

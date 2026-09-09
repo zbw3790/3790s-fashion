@@ -21,7 +21,7 @@ class ReleaseArchitectureAuditTest {
 			"CapeAssetDataPayload", "PlayerFashionSnapshotPayload", "PlayerFashionUpdatePayload",
 			"PlayerFashionRemovePayload", "CapeSelectionResultPayload",
             "FullPlayerFashionSnapshotPayload", "FullPlayerFashionUpdatePayload", "FullPlayerFashionRemovePayload",
-            "FullFashionSelectionResultPayload", "OutfitRegistrySnapshotPayload", "OutfitAssetDataPayload");
+            "FullFashionSelectionResultPayload", "OutfitRegistrySnapshotPayload", "OutfitAssetDataPayload", "OutfitRegistryRefreshPayload");
 
 	@Test
 	void mainSourceSetContainsNoClientOnlyReferences() throws IOException {
@@ -48,7 +48,7 @@ class ReleaseArchitectureAuditTest {
 	}
 
 	@Test
-	void allFourteenClientReceiversUseCurrentConnectionGate() {
+	void allFifteenClientReceiversUseCurrentConnectionGate() {
 		String network = read(root().resolve(
 				"src/client/java/vanillafashion/client/network/VanillaFashionClientNetworking.java"))
                 + read(root().resolve("src/client/java/vanillafashion/client/network/ClientFullFashionNetworking.java"));
@@ -134,6 +134,21 @@ class ReleaseArchitectureAuditTest {
 		assertTrue(mixin.contains("cancellable = true"));
 		assertFalse(mixin.contains("@Overwrite"));
 	}
+
+    @Test void exactlyOneCommonInteractionMixinAndNoForwardCallback() throws IOException {
+        try (var files=Files.walk(root().resolve("src/main/java"))) {
+            assertEquals(List.of("PlayerInteractionMixin.java"),files.filter(p->p.toString().endsWith("Mixin.java")).map(p->p.getFileName().toString()).toList());
+        }
+        var config=JsonParser.parseString(read(root().resolve("src/main/resources/vanilla_fashion.mixins.json"))).getAsJsonObject();
+        assertEquals("PlayerInteractionMixin",config.getAsJsonArray("mixins").get(0).getAsString());
+        assertEquals(1,config.getAsJsonArray("mixins").size());
+        assertTrue(read(root().resolve("src/main/resources/fabric.mod.json")).contains("vanilla_fashion.mixins.json"));
+        String mixin=read(root().resolve("src/main/java/vanillafashion/mixin/PlayerInteractionMixin.java"));
+        assertTrue(mixin.contains("@At(\"RETURN\")")); assertTrue(mixin.contains("cancellable=true"));
+        assertTrue(mixin.contains("interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;"));
+        assertFalse(readTree(root().resolve("src/main/java")).contains("UseEntityCallback"));
+        assertFalse(mixin.contains("attack")); assertFalse(mixin.contains("@Overwrite"));
+    }
 
 	private static Path root() {
 		for (Path path = Path.of(System.getProperty("user.dir")).toAbsolutePath(); path != null;

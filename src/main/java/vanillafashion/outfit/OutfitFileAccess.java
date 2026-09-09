@@ -33,6 +33,14 @@ class OutfitFileAccess {
 		return stamp;
 	}
 
+	Stamp existingRoot(Path path) throws IOException {
+        Stamp stamp = stamp(path);
+        if (!stamp.directory()) throw new Failure(NOT_DIRECTORY);
+        // 手动重载不创建根，也不接受把根改指到其他实际位置。
+        if (!stamp.logical().equals(stamp.real())) throw new Failure(UNSAFE_PATH);
+        return stamp;
+    }
+
 	Stamp directory(Path path, Stamp root) throws IOException {
 		check(root, false);
 		Stamp candidate = stamp(path);

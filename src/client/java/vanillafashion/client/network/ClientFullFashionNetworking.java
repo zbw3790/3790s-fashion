@@ -50,17 +50,31 @@ public final class ClientFullFashionNetworking {
             requestAndRegister(context.client(),registry,store,sync,textures,logger);
             logger.debug("装束 Registry 已接收：状态={}，定义={}，所需内容={}。",registry.state(),payload.snapshot().entries().size(),registry.requiredHashes().size());
         });
+        boolean refreshes=VanillaFashionClientNetworking.registerCurrentConnectionReceiver(OutfitRegistryRefreshPayload.TYPE,(payload,context) -> {
+            var connection=context.client().getConnection();
+            var result=sync.refresh(connection,payload.registryGeneration(),payload.snapshot());
+            if (result==ClientOutfitRegistry.Result.CONFLICT) {
+                textures.deactivate(connection);
+                if (!warned[1]) { warned[1]=true; logger.warn("装束刷新代次发生协议冲突，已停用当前连接装束同步。"); }
+                return;
+            }
+            if (result==ClientOutfitRegistry.Result.APPLIED) textures.retain(connection,registry.requiredHashes());
+            if (result==ClientOutfitRegistry.Result.APPLIED || result==ClientOutfitRegistry.Result.IDEMPOTENT)
+                requestAndRegister(context.client(),registry,store,sync,textures,logger);
+            logger.debug("装束目录刷新已处理：代次={}，结果={}，定义={}。",payload.registryGeneration(),result,registry.entries().size());
+        });
         boolean assets=VanillaFashionClientNetworking.registerCurrentConnectionReceiver(OutfitAssetDataPayload.TYPE,(payload,context) -> {
             var connection=context.client().getConnection(); var result=sync.receive(connection,payload);
             if (result==ClientOutfitAssetSync.Receive.STORED) {
                 var registration=textures.register(connection,store,payload.sha256(),ClientOutfitTextureManager.minecraft(context.client().getTextureManager()),logger);
                 logger.debug("装束内容已验证：hash={}，字节={}，纹理={}，剩余 pending={}。",payload.sha256().substring(0,12),payload.pngBytes().length,registration,sync.pendingCount());
             }
+            else if (result==ClientOutfitAssetSync.Receive.NOT_AUTHORIZED || result==ClientOutfitAssetSync.Receive.STALE) logger.debug("已忽略旧视图装束资产：{}。",result);
             else if (!warned[1]) { warned[1]=true; logger.warn("已拒绝当前连接不符合授权或验证要求的装束资产：{}；同类诊断不重复。",result); }
         });
-        if (!(snapshots && updates && removes && results && definitions && assets)) throw new IllegalStateException("完整时装客户端接收器重复注册。");
+        if (!(snapshots && updates && removes && results && definitions && refreshes && assets)) throw new IllegalStateException("完整时装客户端接收器重复注册。");
         resultReceiverReady=true;
-        logger.info("Vanilla Fashion 新增六种 S2C 接收器已注册，客户端使用聚合权威和独立装束资产。");
+        logger.info("Vanilla Fashion 新增七种 S2C 接收器已注册，客户端使用聚合权威和独立装束资产。");
     }
     private static void protocolWarning(ClientPlayerFashionRegistry authority, Logger logger, boolean[] warned) {
         if (authority.full().protocolFailed() && !warned[0]) { warned[0]=true; logger.warn("同 revision 的完整权威不一致，已停用当前连接时装权威，重连后恢复。"); }

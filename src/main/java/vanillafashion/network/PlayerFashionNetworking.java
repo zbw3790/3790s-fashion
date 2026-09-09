@@ -9,7 +9,8 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.slf4j.Logger;
 import vanillafashion.VanillaFashion;
 import vanillafashion.fashion.*;
-import vanillafashion.outfit.OutfitRegistrySnapshot;
+import vanillafashion.outfit.*;
+import net.fabricmc.loader.api.FabricLoader;
 
 /** 聚合权威的唯一网络编排；连接路线决定投影，发送前仍逐 Payload 检查能力。 */
 public final class PlayerFashionNetworking {
@@ -22,6 +23,15 @@ public final class PlayerFashionNetworking {
 
     public static PlayerFashionNetworking register(Logger logger) {
         var networking = new PlayerFashionNetworking();
+        OutfitReloadCommand.register(source -> {
+            var server=source.getServer(); FashionServerTasks.requireServerThread(server);
+            var channel=networking.channels.find(server); var service=VanillaFashion.playerFashionService(server);
+            if (channel==null || !channel.running() || service.isEmpty()) return OutfitRegistryReloadService.Result.failed("时装服务尚未就绪或正在停止。");
+            var result=new OutfitRegistryReloadService(service.orElseThrow(),OutfitRegistryLoader.rootUnder(FabricLoader.getInstance().getConfigDir()),
+                    () -> FashionServerTasks.requireServerThread(server)).reload(publication -> channel.refresh(service.orElseThrow(),publication));
+            OutfitDiagnostic.report(result.diagnostics(),logger);
+            logger.info("{}",result.message()); return result;
+        });
         PayloadTypeRegistry.clientboundPlay().register(PlayerFashionSnapshotPayload.TYPE, PlayerFashionSnapshotPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(PlayerFashionUpdatePayload.TYPE, PlayerFashionUpdatePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(PlayerFashionRemovePayload.TYPE, PlayerFashionRemovePayload.CODEC);
@@ -32,6 +42,7 @@ public final class PlayerFashionNetworking {
         PayloadTypeRegistry.clientboundPlay().register(FullPlayerFashionRemovePayload.TYPE, FullPlayerFashionRemovePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(FullFashionSelectionResultPayload.TYPE, FullFashionSelectionResultPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(OutfitRegistrySnapshotPayload.TYPE, OutfitRegistrySnapshotPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(OutfitRegistryRefreshPayload.TYPE, OutfitRegistryRefreshPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(OutfitAssetDataPayload.TYPE, OutfitAssetDataPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(SetFullFashionSelectionPayload.TYPE, SetFullFashionSelectionPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(OutfitAssetRequestPayload.TYPE, OutfitAssetRequestPayload.CODEC);
@@ -78,11 +89,9 @@ public final class PlayerFashionNetworking {
             var service=VanillaFashion.playerFashionService(context.server()); var sender=context.player();
             if (service.isEmpty() || !service.orElseThrow().isCurrent(sender.getUUID(), sender.connection)
                     || !ServerPayloadSender.canSend(sender.connection, OutfitAssetDataPayload.TYPE)) return;
-            service.orElseThrow().outfits().ifPresent(outfits -> {
-                for (String hash : channel.assets.claim(sender.connection, payload)) outfits.assets().find(hash).ifPresent(asset ->
+            for (String hash : channel.assets.claim(sender.connection, payload)) channel.assets.asset(sender.connection,hash).ifPresent(asset ->
                         { if (ServerPayloadSender.sendIfSupported(sender.connection, new OutfitAssetDataPayload(hash, asset.bytes())))
                             logger.debug("装束内容已发送：hash={}，字节={}。", hash.substring(0,12),asset.size()); });
-            });
         }))) throw new IllegalStateException("装束资产请求接收器重复注册。");
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> networking.execute(server, channel -> VanillaFashion.playerFashionService(server).ifPresent(service -> {
             var id=handler.getPlayer().getUUID();
@@ -170,7 +179,32 @@ public final class PlayerFashionNetworking {
         private void initializeAssets(PlayerFashionService service, ServerGamePacketListenerImpl handler) {
             if (route(handler)!=FashionAuthorityRoute.V2) return;
             var snapshot=service.outfits().map(OutfitRegistrySnapshot::from).orElseGet(OutfitRegistrySnapshot::unavailable);
-            if (ServerPayloadSender.sendIfSupported(handler,new OutfitRegistrySnapshotPayload(snapshot))) assets.open(handler,snapshot.requiredHashes());
+            if (ServerPayloadSender.sendIfSupported(handler,new OutfitRegistrySnapshotPayload(snapshot))) {
+                service.outfits().ifPresent(loaded -> assets.open(handler,ConnectionOutfitAssetView.from(service.registryGeneration(),loaded)));
+                if (service.registryGeneration()>0)
+                    ServerPayloadSender.sendIfSupported(handler,new OutfitRegistryRefreshPayload(service.registryGeneration(),snapshot));
+            }
+        }
+        private OutfitRegistryReloadService.Clients refresh(PlayerFashionService service, OutfitRegistryReloadService.Publication publication) {
+            var view=ConnectionOutfitAssetView.from(publication.generation(),publication.candidate());
+            var counts=refreshAssets(service.connections().values(),view,
+                    value -> ServerPayloadSender.canSend((ServerGamePacketListenerImpl)value,OutfitRegistryRefreshPayload.TYPE),
+                    value -> ServerPayloadSender.sendIfSupported((ServerGamePacketListenerImpl)value,new OutfitRegistryRefreshPayload(view.generation(),view.snapshot())));
+            publication.commit().authorities().forEach(entry -> changed(service,entry));
+            return counts;
+        }
+        OutfitRegistryReloadService.Clients refreshAssets(Collection<Object> connections, ConnectionOutfitAssetView view,
+                java.util.function.Predicate<Object> supported, java.util.function.Predicate<Object> send) {
+            var receivers=new ArrayList<Object>(); int pinned=0;
+            for (Object connection:connections) {
+                if (assets.view(connection).isEmpty()) continue;
+                if (supported.test(connection)) {
+                    if (assets.refreshAuthorized(connection,view)) receivers.add(connection);
+                } else pinned++;
+            }
+            // 全部连接来源替换后才发刷新；刷新在其引起的 authority Update 之前。
+            int sent=0;for (Object receiver:receivers) if (send.test(receiver)) sent++;
+            return new OutfitRegistryReloadService.Clients(sent,pinned);
         }
         private void snapshot(PlayerFashionService service, ServerGamePacketListenerImpl handler) {
             if (route(handler)==FashionAuthorityRoute.V2) ServerPayloadSender.sendIfSupported(handler,new FullPlayerFashionSnapshotPayload(service.fullSnapshot()));

@@ -22,6 +22,12 @@ public final class ClientOutfitTextureManager {
     public boolean matches(Object connection) { return connection!=null && this.connection==connection; }
     public boolean disconnect(Object connection) { if (!matches(connection)) return false; release(); this.connection=null; return true; }
     public void deactivate(Object connection) { if (matches(connection)) release(); }
+    public void retain(Object connection, Set<String> required) {
+        if (!matches(connection)) return;
+        var iterator=textures.entrySet().iterator();
+        while (iterator.hasNext()) { var entry=iterator.next(); if (!required.contains(entry.getKey())) { entry.getValue().close(); iterator.remove(); } }
+        failed.retainAll(required);
+    }
     public Optional<Identifier> find(Object connection, String hash) {
         if (!matches(connection)) return Optional.empty(); var texture=textures.get(hash);
         return texture!=null && texture.ready()?Optional.of(identifierFor(hash)):Optional.empty();

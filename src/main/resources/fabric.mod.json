@@ -16,6 +16,7 @@
 		]
 	},
 	"mixins": [
+        "vanilla_fashion.mixins.json",
 		{
 			"config": "vanilla_fashion.client.mixins.json",
 			"environment": "client"
