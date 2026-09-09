@@ -36,10 +36,17 @@ class PublicBrandingAuditTest {
         assertDimensions(logo, 512);
         assertDimensions(mediumLogo, 256);
         assertDimensions(smallLogo, 128);
-        assertEquals("6301eebeda43cc47623cd3886fb47b21f77cf2abab3a3e2a36970b279618c6ce", sha256(logo));
-        assertEquals("31bc223b080557920154886092d16e26b35927fff914d5692aa82822c1e17eed", sha256(mediumLogo));
-        assertEquals("52efa02194417c62039ae011db3afabf867a52bb8ec64a9a03ff9404baa5e8d6", sha256(smallLogo));
+        assertEquals("51d51b580197812431141bea66e82546bd902c608f10a61b7cf8b89923c2647a", sha256(logo));
+        assertEquals("b591dac8fb7631fdbf985f9bc9d191f60503f7b319c0808ac8474cad4e558966", sha256(mediumLogo));
+        assertEquals("05d31278fd2e98a28fa1f5879e29ea280af846853ed86e7c03ccf7a2e79f2cfd", sha256(smallLogo));
+        Path tinyLogo = project.resolve("branding/logo-64.png");
+        assertDimensions(tinyLogo, 64);
+        assertEquals("59232a4adb2f934d46cd6e28985cf72db29fe04848c1eafdf7ebe873c461ebb5", sha256(tinyLogo));
         assertArrayEquals(Files.readAllBytes(smallLogo), Files.readAllBytes(icon));
+        BufferedImage canonical = ImageIO.read(logo.toFile());
+        assertEquals(0xFF3790FF, canonical.getRGB(256, 256));
+        assertEquals(0xFFFFFFFF, canonical.getRGB(256, 416));
+        assertEquals(0xFF26292B, canonical.getRGB(0, 0));
     }
 
     @Test
@@ -64,6 +71,10 @@ class PublicBrandingAuditTest {
     @Test
     void brandingNoticeSeparatesThirdPartyAssetsFromCodeLicense() throws IOException {
         String notice = Files.readString(root().resolve("branding/NOTICE.md"));
+        assertTrue(notice.contains("当前 Logo 不再嵌入 Mojang Armor Stand sprite"));
+        assertTrue(notice.contains("数字仅由原创七段矩形绘制"));
+        assertTrue(notice.contains("#3790FF"));
+        assertTrue(notice.contains("历史品牌"));
         assertTrue(notice.contains("Minecraft Java Edition 26.2"));
         assertTrue(notice.contains("assets/minecraft/textures/item/armor_stand.png"));
         assertTrue(notice.contains("assets/minecraft/textures/font/ascii.png"));

@@ -2,17 +2,19 @@
 
 为 Minecraft Java Edition 26.2 提供服务器本地披风、Outfit 外层装束与 Creative Inventory 风格衣柜：服主准备外观资源，玩家在游戏内预览和选择，保留原版基础皮肤、模型与动作。
 
-![项目 Logo](branding/logo-128.png)
+![原创 Outfit 衬衫 Logo](branding/logo-128.png)
 
 ## 安装需求
 
-- 当前已发布稳定版本：`v0.3.1`
+- 当前已发布稳定版本：`v0.3.2`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
 - Java：`25`；从源码构建需要 JDK 25
 
-客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `vanilla-fashion-0.3.1.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `vanilla-fashion-0.3.2.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+
+本次 v0.3.2 仅更新品牌视觉：采用原创 Outfit 衬衫 Logo、`#3790FF` 主色和匹配的 Outfit Tab 配色，功能与 v0.3.1 相同。当前 Logo 不再嵌入 Minecraft 原版盔甲架 sprite，图像由确定性脚本生成，未使用 AI。
 
 ## 这个 Mod 能做什么
 
@@ -72,7 +74,7 @@ PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素�
 /vanillafashion reload
 ```
 
-v0.3.1 客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply；冻结 v0.3.0 客户端在线时继续使用加入时的资源视图，重连后获得最新目录。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
+v0.3.1 及当前客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply；冻结 v0.3.0 客户端在线时继续使用加入时的资源视图，重连后获得最新目录。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
 
 ## 玩家：使用衣柜
 
@@ -89,9 +91,9 @@ v0.3.1 客户端自动更新世界、衣柜 Preview 和网格缩略，无需重�
 - 未安装本 Mod 的原版客户端可以进入安装了本 Mod 的服务器，但不能使用衣柜或显示自定义披风／装束。
 - 安装了本 Mod 的客户端可以进入原版服务器；此时不提供衣柜和服务器时装功能。
 
-v0.3.1 继续使用 schema 2，直接兼容上一稳定版 v0.3.0 保存。v0.3.0 起可读取 v0.2.1 的 schema v1 保存，仅发生实际保存修改时写入 schema v2；不要用旧版 Mod 反向读取 v2 保存。当前客户端连接 v0.2.1 服务器时，Cape 正常可用，Outfit 页签提示不支持；v0.2.1 客户端连接当前服务器时，其 Cape 修改不会清除已有装束。
+v0.3.2 继续使用 schema 2，完整兼容 v0.3.1 保存，保留 v0.3.1 对 v0.3.0 保存的兼容。v0.3.0 起可读取 v0.2.1 的 schema v1 保存，仅发生实际保存修改时写入 schema v2；不要用旧版 Mod 反向读取 v2 保存。当前客户端连接 v0.2.1 服务器时，Cape 正常可用，Outfit 页签提示不支持；v0.2.1 客户端连接当前服务器时，其 Cape 修改不会清除已有装束。
 
-Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。上一版本 v0.3.0 的功能与制品保留在 [v0.3.0 Release](https://github.com/zbw3790/3790s-vanilla-style-fashion/releases/tag/v0.3.0)。
+Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。上一稳定版的功能与制品保留在 [v0.3.1 Release](https://github.com/zbw3790/3790s-vanilla-style-fashion/releases/tag/v0.3.1)。
 
 详细的双向兼容行为见[兼容性说明](docs/compatibility.md)。
 
@@ -103,7 +105,7 @@ Windows PowerShell：
 .\gradlew.bat clean build --console=plain
 ```
 
-正式 Mod JAR 输出到 `build/libs/vanilla-fashion-0.3.1.jar`。
+正式 Mod JAR 输出到 `build/libs/vanilla-fashion-0.3.2.jar`。
 
 如需重建包含 README、许可证和 Cape 模板的完整发布 ZIP：
 
@@ -113,4 +115,4 @@ python -B tools/package_release.py
 
 ## 许可证
 
-项目代码采用 [MIT License](LICENSE)；Logo 所含第三方素材见 [品牌素材来源说明](branding/NOTICE.md)。
+项目代码采用 [MIT License](LICENSE)；当前 Logo 使用项目原创 Outfit 衬衫与 `#3790FF` 主色，素材与历史说明见 [品牌说明](branding/NOTICE.md)。

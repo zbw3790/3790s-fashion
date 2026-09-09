@@ -1,4 +1,4 @@
-"""校验当前正式 Logo；使用显式本地资源可完整再生已冻结的数字盔甲架图像。"""
+"""离线绘制原创衬衫品牌 Logo；几何来自项目 Painter，不读取任何游戏贴图。"""
 
 from __future__ import annotations
 
@@ -6,30 +6,31 @@ import argparse
 import hashlib
 import io
 import json
-import struct
+import re
 import sys
 from collections import deque
 from pathlib import Path
-from zipfile import ZipFile
+
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-APPROVED = {
-    "logo.png": (512, 2695, "6301eebeda43cc47623cd3886fb47b21f77cf2abab3a3e2a36970b279618c6ce"),
-    "logo-256.png": (256, 1447, "31bc223b080557920154886092d16e26b35927fff914d5692aa82822c1e17eed"),
-    "logo-128.png": (128, 887, "52efa02194417c62039ae011db3afabf867a52bb8ec64a9a03ff9404baa5e8d6"),
-}
-CLIENT_SHA256 = "40896ee9f1e2bec3c934daac7e93d41e9e3d9c2f8ae0ca366d52ffbfd1afa290"
-RESOURCE_HASHES = {
-    "assets/minecraft/textures/item/armor_stand.png": "54d95c69cf2bb9e566c6a013c8258bd44e998de5d0578fc79acb8d16b38b1c8a",
-    "assets/minecraft/textures/font/ascii.png": "e8646f1ed1f4bfd597d262cca3d8fac88ceaaa62807bbd5e607b2e3fe41c928a",
-    "assets/minecraft/font/default.json": "32942032bb9cc9a482088dcbd617a9ce339fb9b722e9696c6cac13bac5949832",
-    "assets/minecraft/font/include/default.json": "e17f8a4289db15bf662df3ab623ad4dd9bda9d2b2e3e9e9e743234ff186bd0c4",
-    "assets/minecraft/items/armor_stand.json": "e82ff3ff89b4aa96eacf20dbec0932c17861edde073ffd064053aff3c7b104e9",
-    "assets/minecraft/models/item/armor_stand.json": "5e5136e656cca28b3be7233f36b636b562757e52efe70c0dd0bcf11a6f8c3a6f",
-}
-POSITIONS = {"3": (8, 14), "7": (90, 14), "9": (8, 72), "0": (90, 72)}
+PAINTER_RELATIVE = "src/client/java/vanillafashion/client/screen/WardrobeGuiPainter.java"
+BRAND_BLUE = "#3790FF"
+BRAND_RGB = (55, 144, 255)
 BACKGROUND = (38, 41, 43, 255)
 DIGIT_COLOR = (54, 58, 61, 255)
+WHITE = (255, 255, 255, 255)
+MASTER_SIZE = 128
+PIXEL_SCALE = 6
+SHIRT_ORIGIN = (16, 16)
+POSITIONS = {"3": (8, 14), "7": (90, 14), "9": (8, 72), "0": (90, 72)}
+OUTPUT_SIZES = {"logo.png": 512, "logo-256.png": 256, "logo-128.png": 128, "logo-64.png": 64}
+# 独立定义的七段矩形字形，保持旧数字位置、5×7 格与低对比颜色，不提取字体位图。
+SEGMENTS = {
+    "a": (0, 0, 5, 1), "b": (4, 0, 5, 4), "c": (4, 3, 5, 7),
+    "d": (0, 6, 5, 7), "e": (0, 3, 1, 7), "f": (0, 0, 1, 4), "g": (0, 3, 5, 4),
+}
+DIGITS = {"3": "abcdg", "7": "abc", "9": "abcdfg", "0": "abcdef"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -41,135 +42,174 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def validate_png(name: str, data: bytes) -> None:
-    size, length, expected = APPROVED[name]
-    require(len(data) == length and digest(data) == expected,
-            f"{name} 与当前批准 PNG 的大小或 SHA-256 不一致。")
-    require(data[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", data[16:24]) == (size, size),
-            f"{name} 的 PNG 尺寸不正确。")
+def mix(base: tuple[int, int, int], target: int, percent: int) -> tuple[int, ...]:
+    require(0 <= percent <= 100, "混色百分比必须位于 0～100。")
+    return tuple((channel * (100 - percent) + target * percent + 50) // 100 for channel in base)
 
 
-def check_current(directory: Path, icon: Path | None = None) -> None:
-    """只校验已存在的 PNG；不读取游戏资源，不声称已经重新生成。"""
-    for name in APPROVED:
-        validate_png(name, (directory / name).read_bytes())
-    if icon is not None:
-        require(icon.read_bytes() == (directory / "logo-128.png").read_bytes(),
-                "metadata icon 与当前 128 像素 Logo 不一致。")
+def lighter(base: tuple[int, int, int], percent: int) -> tuple[int, ...]:
+    return mix(base, 255, percent)
 
 
-def load_resources(client_jar: Path) -> dict[str, bytes]:
-    require(client_jar.is_file(), "找不到显式指定的本地 Minecraft 26.2 客户端 JAR。")
-    data = client_jar.read_bytes()
-    require(digest(data) == CLIENT_SHA256, "客户端 JAR 与冻结的 Minecraft 26.2 官方来源不一致。")
-    with ZipFile(io.BytesIO(data)) as archive:
-        require(json.loads(archive.read("version.json"))["id"] == "26.2", "Minecraft 版本不符。")
-        resources = {entry: archive.read(entry) for entry in RESOURCE_HASHES}
-    for entry, expected in RESOURCE_HASHES.items():
-        require(digest(resources[entry]) == expected, f"原版资源摘要不符：{entry}")
-    return resources
+def darker(base: tuple[int, int, int], percent: int) -> tuple[int, ...]:
+    return mix(base, 0, percent)
 
 
-def regenerate(client_jar: Path) -> dict[str, bytes]:
-    """从物品 PNG 和默认字体字形完整再生，不嵌入或下载原始资产。"""
-    resources = load_resources(client_jar)
-    try:
-        from PIL import Image, ImageDraw
-    except ImportError as error:
-        raise ValueError("完整再生需要 Pillow；冻结图像使用 Pillow 10.3.0。普通校验不需要 Pillow。") from error
-    with Image.open(io.BytesIO(resources["assets/minecraft/textures/item/armor_stand.png"])) as png:
-        source = png.convert("RGBA")
-    bbox = source.getchannel("A").getbbox()
-    require(source.size == (16, 16) and bbox == (3, 0, 12, 16), "盔甲架主体尺寸与冻结来源不一致。")
-    crop = source.crop(bbox)
-    base = Image.new("RGBA", (11, 18), (0, 0, 0, 0))
-    occupied = {(x+1, y+1) for y in range(16) for x in range(9) if crop.getpixel((x,y))[3]}
-    exterior = ({(x,y) for x in range(11) for y in (0,17)}
-                | {(x,y) for x in (0,10) for y in range(18)}) - occupied
+def palette() -> dict[str, tuple[int, ...]]:
+    return {"h": (*darker(BRAND_RGB, 55), 255), "i": (*lighter(BRAND_RGB, 30), 255),
+            "j": (*darker(BRAND_RGB, 20), 255), "k": (*BRAND_RGB, 255)}
+
+
+def shirt_rows(painter: Path) -> list[str]:
+    source = painter.read_text(encoding="utf-8")
+    require("BRAND_BLUE = 0xFF3790FF;" in source, "Painter 的品牌主色与生成器不一致。")
+    match = re.search(r"String\[\] OUTFIT_ICON\s*=\s*\{(.*?)\};", source, re.S)
+    require(match is not None, "找不到原创 Outfit 图标几何。")
+    rows = re.findall(r'"([.hijk]+)"', match.group(1))
+    require(len(rows) == 16 and all(len(row) == 16 for row in rows), "衬衫必须保持 16×16 几何。")
+    return rows
+
+
+def shirt_image(painter: Path) -> Image.Image:
+    image = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    colors = palette()
+    for y, row in enumerate(shirt_rows(painter)):
+        for x, pixel in enumerate(row):
+            if pixel != ".":
+                image.putpixel((x, y), colors[pixel])
+    return image
+
+
+def add_outline(source: Image.Image) -> Image.Image:
+    """向外八邻域膨胀一个像素，仅绘制与画布边缘相通的透明区域。"""
+    width, height = source.size
+    occupied = {(x, y) for y in range(height) for x in range(width) if source.getpixel((x, y))[3]}
+    require(occupied and all(0 < x < width - 1 and 0 < y < height - 1 for x, y in occupied),
+            "主体边缘必须为一个外描边像素留出空间。")
+    exterior = ({(x, y) for x in range(width) for y in (0, height - 1)}
+                | {(x, y) for x in (0, width - 1) for y in range(height)}) - occupied
     queue = deque(sorted(exterior))
     while queue:
         x, y = queue.popleft()
-        for dx, dy in ((-1,0),(1,0),(0,-1),(0,1)):
-            point = (x+dx, y+dy)
-            if (0 <= point[0] < 11 and 0 <= point[1] < 18
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            point = (x + dx, y + dy)
+            if (0 <= point[0] < width and 0 <= point[1] < height
                     and point not in occupied and point not in exterior):
                 exterior.add(point)
                 queue.append(point)
-    expanded = {(x+dx,y+dy) for x,y in occupied for dx in (-1,0,1) for dy in (-1,0,1)}
+    expanded = {(x + dx, y + dy) for x, y in occupied for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+    result = source.copy()
     for point in (expanded - occupied) & exterior:
-        base.putpixel(point, (255,255,255,255))
-    for x, y in occupied:
-        base.putpixel((x,y), crop.getpixel((x-1,y-1)))
-    foreground = Image.new("RGBA", (128,128), (0,0,0,0))
-    foreground.paste(base.resize((66,108), Image.Resampling.NEAREST), (31,10))
+        result.putpixel(point, WHITE)
+    return result
 
-    default = json.loads(resources["assets/minecraft/font/default.json"])
-    require(any(p.get("id") == "minecraft:include/default" and p.get("filter") == {"uniform": False}
-                for p in default["providers"]), "默认字体引用不符合冻结方案。")
-    providers = json.loads(resources["assets/minecraft/font/include/default.json"])["providers"]
-    with Image.open(io.BytesIO(resources["assets/minecraft/textures/font/ascii.png"])) as png:
-        atlas = png.convert("RGBA")
-    canvas = Image.new("RGBA", (128,128), BACKGROUND)
-    draw = ImageDraw.Draw(canvas)
+
+def background_image() -> Image.Image:
+    image = Image.new("RGBA", (MASTER_SIZE, MASTER_SIZE), BACKGROUND)
+    draw = ImageDraw.Draw(image)
     for digit, (left, top) in POSITIONS.items():
-        provider = next(p for p in providers if p["type"] == "bitmap"
-                        and any(digit in row for row in p["chars"]))
-        require(provider["file"] == "minecraft:font/ascii.png", "数字未引用冻结的原版字体贴图。")
-        rows = provider["chars"]
-        width, height = atlas.width // len(rows[0]), atlas.height // len(rows)
-        row = next(i for i, line in enumerate(rows) if digit in line)
-        column = rows[row].index(digit)
-        mask = atlas.crop((column*width,row*height,(column+1)*width,(row+1)*height)).getchannel("A")
-        mask = mask.crop(mask.getbbox())
-        require(mask.size == (5,7) and set(mask.getdata()) == {0,255}, "数字字形尺寸或透明度不符。")
-        for y in range(7):
-            for x in range(5):
-                if mask.getpixel((x,y)):
-                    px, py = left + x*6, top + y*6
-                    draw.rectangle((px,py,px+5,py+5), fill=DIGIT_COLOR)
-    canvas.alpha_composite(foreground)
-    require(all(a == b for a,b in zip(foreground.getdata(),canvas.getdata()) if a[3]),
-            "再生过程中主体像素发生改变。")
-    outputs = {}
-    for name, (size, _, _) in APPROVED.items():
-        image = canvas.resize((size,size), Image.Resampling.NEAREST)
-        clean = Image.frombytes("RGBA", image.size, image.tobytes())
-        buffer = io.BytesIO()
-        clean.save(buffer, format="PNG", compress_level=9, optimize=False)
-        outputs[name] = buffer.getvalue()
-        validate_png(name, outputs[name])
-    return outputs
+        for segment in DIGITS[digit]:
+            x0, y0, x1, y1 = SEGMENTS[segment]
+            draw.rectangle((left + x0 * PIXEL_SCALE, top + y0 * PIXEL_SCALE,
+                            left + x1 * PIXEL_SCALE - 1, top + y1 * PIXEL_SCALE - 1), fill=DIGIT_COLOR)
+    return image
+
+
+def pixel_master(painter: Path) -> Image.Image:
+    image = background_image()
+    shirt = add_outline(shirt_image(painter))
+    image.alpha_composite(shirt.resize((96, 96), Image.Resampling.NEAREST), SHIRT_ORIGIN)
+    return image
+
+
+def encode_png(image: Image.Image) -> bytes:
+    clean = Image.frombytes("RGBA", image.size, image.tobytes())
+    output = io.BytesIO()
+    clean.save(output, format="PNG", compress_level=9, optimize=False)
+    return output.getvalue()
+
+
+def regenerate(painter: Path = ROOT / PAINTER_RELATIVE) -> dict[str, bytes]:
+    master = pixel_master(painter)
+    return {name: encode_png(master.resize((size, size), Image.Resampling.NEAREST))
+            for name, size in OUTPUT_SIZES.items()}
+
+
+def check_current(directory: Path, icon: Path | None = None,
+                  painter: Path = ROOT / PAINTER_RELATIVE) -> None:
+    expected = regenerate(painter)
+    for name, data in expected.items():
+        require((directory / name).read_bytes() == data, f"{name} 与确定性生成结果不一致。")
+    if icon is not None:
+        require(icon.read_bytes() == expected["logo-128.png"], "metadata icon 与 128 像素 Logo 不一致。")
+
+
+def contact_sheet(outputs: dict[str, bytes], path: Path) -> None:
+    """仅输出本地审查图，不作为产品资源；字号标签使用 Pillow 自带字体。"""
+    sheet = Image.new("RGBA", (1080, 600), (232, 234, 237, 255))
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default()
+    x = 24
+    for name, size in OUTPUT_SIZES.items():
+        draw.text((x, 18), f"{size} x {size}", fill=(40, 40, 40, 255), font=font)
+        with Image.open(io.BytesIO(outputs[name])) as png:
+            sheet.alpha_composite(png.convert("RGBA"), (x, 48))
+        x += size + 24
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(encode_png(sheet))
+
+
+def manifest(outputs: dict[str, bytes], painter: Path) -> dict:
+    return {"brand_blue": BRAND_BLUE, "source": PAINTER_RELATIVE,
+            "geometry_sha256": digest("\n".join(shirt_rows(painter)).encode("ascii")),
+            "master_size": MASTER_SIZE, "shirt_origin": SHIRT_ORIGIN, "pixel_scale": PIXEL_SCALE,
+            "background": BACKGROUND, "digit_color": DIGIT_COLOR, "digit_positions": POSITIONS,
+            "digit_source": "原创七段矩形，不读取字体贴图", "outline": "外部透明区域八邻域一像素纯白描边",
+            "palette": palette(), "resampling": "NEAREST", "ai_generation": False,
+            "game_texture_input": False,
+            "outputs": {name: {"size": [OUTPUT_SIZES[name]] * 2, "bytes": len(data), "sha256": digest(data)}
+                        for name, data in outputs.items()}}
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="校验正式 Logo；完整再生必须显式指定本地资源。")
+    parser = argparse.ArgumentParser(description="离线校验或生成原创衬衫品牌 Logo。")
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument("--check", action="store_true", help="只校验已有正式 PNG；也是默认行为。")
-    modes.add_argument("--regenerate", action="store_true", help="从显式本地客户端 JAR 完整再生。")
-    parser.add_argument("--client-jar", type=Path, help="完整再生所需的 Minecraft 26.2 原版客户端 JAR。")
-    parser.add_argument("--output-dir", type=Path, help="校验目录，或完整再生时必须指定的新空目录。")
-    parser.add_argument("--icon-output", type=Path, help="校验时额外检查的 metadata icon 路径，不写入。")
+    modes.add_argument("--check", action="store_true", help="只校验已有 PNG；也是默认行为。")
+    modes.add_argument("--regenerate", action="store_true", help="无需游戏资源，向新空目录完整生成四个尺寸。")
+    parser.add_argument("--output-dir", type=Path, help="校验目录，或生成时必须指定的新空目录。")
+    parser.add_argument("--painter-source", type=Path, default=ROOT / PAINTER_RELATIVE,
+                        help="显式的项目原创 Painter Java 源文件。")
+    parser.add_argument("--icon-output", type=Path, help="校验时额外检查的 metadata icon，不写入。")
+    parser.add_argument("--preview", type=Path, help="生成时可选的本地四尺寸审查图。")
+    parser.add_argument("--manifest", type=Path, help="生成时可选的确定性审计清单。")
     args = parser.parse_args()
     if args.regenerate:
-        if args.client_jar is None or args.output_dir is None or args.icon_output is not None:
-            parser.error("完整再生需要 --client-jar 和 --output-dir；不接受 --icon-output。")
+        if args.output_dir is None or args.icon_output is not None:
+            parser.error("完整生成需要 --output-dir；不接受 --icon-output。")
         output = args.output_dir.resolve()
         require(not output.exists() or (output.is_dir() and not any(output.iterdir())),
-                "完整再生只写入新的空目录，不覆盖正式或历史图像。")
-        images = regenerate(args.client_jar.resolve())
+                "完整生成只写入新的空目录，不覆盖既有图像。")
+        images = regenerate(args.painter_source)
         output.mkdir(parents=True, exist_ok=True)
         for name, data in images.items():
             (output / name).write_bytes(data)
-        print("完整再生通过：三份 PNG 与当前批准的 SHA-256 逐一一致。")
+        if args.preview:
+            contact_sheet(images, args.preview)
+        if args.manifest:
+            args.manifest.parent.mkdir(parents=True, exist_ok=True)
+            args.manifest.write_bytes((json.dumps(manifest(images, args.painter_source),
+                                                ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        print("离线完整生成通过：四个尺寸共用原创像素母版，未使用 AI 或游戏贴图。")
     else:
-        if args.client_jar is not None:
-            parser.error("--client-jar 仅用于 --regenerate；校验现有图像不需要游戏资源。")
+        if args.preview or args.manifest:
+            parser.error("--preview／--manifest 仅用于 --regenerate。")
         directory = args.output_dir.resolve() if args.output_dir else ROOT / "branding"
         icon = args.icon_output
         if icon is None and args.output_dir is None:
-            icon = ROOT / "src/main/resources/assets/vanilla_fashion/icon.png"
-        check_current(directory, icon)
-        print("现有 PNG 校验通过：尺寸、冻结 SHA-256 与指定 icon 一致；未执行完整再生。")
+            metadata = json.loads((ROOT / "src/main/resources/fabric.mod.json").read_text("utf-8"))
+            icon = ROOT / "src/main/resources" / metadata["icon"]
+        check_current(directory, icon, args.painter_source)
+        print("现有 PNG 校验通过：四个尺寸与离线再生结果、指定 icon 一致；未写入文件。")
 
 
 if __name__ == "__main__":

@@ -264,11 +264,22 @@ class WardrobeGuiPainterTest {
     }
 
     @Test
-    void shirtIconIsSymmetricOpaquePixelArtUsingCapePaletteWithoutExtraSymbols() {
+    void shirtIconKeepsGeometryWithDedicatedBrandPaletteWithoutChangingCape() throws Exception {
         var bounds = new WardrobeLayout.Bounds(0, 0, 16, 16);
         Commands shirt = new Commands(), cape = new Commands();
         WardrobeGuiPainter.outfitIcon(shirt, bounds); WardrobeGuiPainter.capeIcon(cape, bounds);
-        var palette = new java.util.HashSet<Integer>(); cape.rectangles.forEach(rect -> palette.add(rect.color()));
+        var palette = java.util.Set.of(0xFF3790FF, 0xFF194173, 0xFF73B1FF, 0xFF2C73CC);
+        assertEquals(0xFF3790FF, WardrobeGuiPainter.BRAND_BLUE);
+        assertEquals(0xFF3790FF, shirt.colorAt(7, 9));
+        assertEquals(0xFF347CAC, cape.colorAt(6, 4));
+        var root = java.nio.file.Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        while (!java.nio.file.Files.isRegularFile(root.resolve("settings.gradle"))) root = root.getParent();
+        var logo = javax.imageio.ImageIO.read(root.resolve("branding/logo.png").toFile());
+        for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
+            int color = shirt.colorAt(x, y);
+            if (color != 0) assertEquals(color, logo.getRGB((16 + x * 6 + 3) * 4, (16 + y * 6 + 3) * 4),
+                    "Logo 必须与实际 Painter 的衬衫几何和颜色一致。");
+        }
         for (var rect : shirt.rectangles) { assertTrue(rect.inside(bounds)); assertTrue(palette.contains(rect.color())); }
         for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
             assertEquals(shirt.colorAt(x, y), shirt.colorAt(15 - x, y));

@@ -80,11 +80,17 @@ final class WardrobeGuiPainter {
         outfitIcon(sink, layout.tabIconBounds(1));
     }
 
+    // 项目衬衫品牌色；只作用于 Outfit 图标，不改变 Cape、原版控件或状态色。
+    static final int BRAND_BLUE = 0xFF3790FF;
+    private static final int OUTFIT_EDGE_COLOR = mixOutfitColor(0, 55);
+    private static final int OUTFIT_TOP_COLOR = mixOutfitColor(255, 30);
+    private static final int OUTFIT_SHADOW_COLOR = mixOutfitColor(0, 20);
+
     private static final String[] OUTFIT_ICON = {
-            "................", "................", "....111..111....", "...1221111221...",
-            "..122222222221..", "..134444444431..", "..134444444431..", "..111444444111..",
-            "....13444431....", "....13444431....", "....13444431....", "....13444431....",
-            "....13333331....", "....11111111....", "................", "................"
+            "................", "................", "....hhh..hhh....", "...hiihhhhiih...",
+            "..hiiiiiiiiiih..", "..hjkkkkkkkkjh..", "..hjkkkkkkkkjh..", "..hhhkkkkkkhhh..",
+            "....hjkkkkjh....", "....hjkkkkjh....", "....hjkkkkjh....", "....hjkkkkjh....",
+            "....hjjjjjjh....", "....hhhhhhhh....", "................", "................"
     };
 
     static void outfitIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
@@ -229,6 +235,10 @@ final class WardrobeGuiPainter {
 
 	private static int color(char pixel) {
 		return switch (pixel) {
+			case 'h' -> OUTFIT_EDGE_COLOR;
+			case 'i' -> OUTFIT_TOP_COLOR;
+			case 'j' -> OUTFIT_SHADOW_COLOR;
+			case 'k' -> BRAND_BLUE;
 			case 'K' -> OUTLINE_COLOR;
 			case 'W' -> HIGHLIGHT_COLOR;
 			case 'G' -> FRAME_COLOR;
@@ -250,6 +260,16 @@ final class WardrobeGuiPainter {
 			default -> throw new IllegalArgumentException("未知衣柜像素标记。");
 		};
 	}
+
+    /** 按整数百分比混合黑／白，四舍五入；与离线品牌生成器使用同一公式。 */
+    private static int mixOutfitColor(int target, int percent) {
+        int color = 0xFF000000;
+        for (int shift : new int[]{16, 8, 0}) {
+            int channel = (BRAND_BLUE >>> shift) & 0xFF;
+            color |= ((channel * (100 - percent) + target * percent + 50) / 100) << shift;
+        }
+        return color;
+    }
 
 	private static void rect(RectangleSink sink, int x, int y, int width, int height, int color) {
 		sink.fill(x, y, x + width, y + height, color);
