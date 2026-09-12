@@ -1,8 +1,8 @@
 import java.nio.file.Path;
 
-import vanillafashion.cape.CapeCosmeticDefinition;
-import vanillafashion.cape.CapeCosmeticValidationResult;
-import vanillafashion.cape.CapeCosmeticValidator;
+import dev.zbw3790.fashion.cape.CapeCosmeticDefinition;
+import dev.zbw3790.fashion.cape.CapeCosmeticValidationResult;
+import dev.zbw3790.fashion.cape.CapeCosmeticValidator;
 
 /** 供发布打包脚本调用，直接复用生产 Cape Cosmetic Validator。 */
 public final class PackageReleaseValidator {

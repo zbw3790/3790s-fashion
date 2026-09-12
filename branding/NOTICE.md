@@ -23,9 +23,9 @@ python -B tools/branding/generate_logo.py --regenerate --output-dir run/branding
 
 - Canonical／**MODRINTH_ICON_PATH**：`branding/logo.png`，512×512，不透明 RGBA 方形。
 - 派生版本：`branding/logo-256.png`、`branding/logo-128.png`、`branding/logo-64.png`。
-- 产品 metadata 继续引用 `assets/vanilla_fashion/icon.png`；对应 source tree PNG 与 128 版本逐字节相同。
+- 产品 metadata 继续引用 `assets/fashion_3790/icon.png`；对应 source tree PNG 与 128 版本逐字节相同。
 - 新品牌只影响本次提交后的源码／未来构建；已发布 **v0.3.1** JAR／ZIP、Tag、GitHub Release 与 Release Archive 保持冻结。
-- 品牌视觉已获批准；公开源码按正式发布流程同步，Modrinth 仍由用户手动上传。
+- 品牌视觉已获批准；公开源码和平台素材按获准的统一发布流程同步，历史已发布制品不回写。
 
 | 当前文件 | SHA-256 |
 | --- | --- |

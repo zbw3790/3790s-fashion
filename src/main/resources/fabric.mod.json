@@ -1,31 +1,40 @@
 {
-	"schemaVersion": 1,
-	"id": "vanilla_fashion",
-	"version": "${version}",
-	"name": "3790's Vanilla Style Fashion",
-	"description": "保持原版视觉与行为风格的服务器权威时装模组。",
-	"license": "MIT",
-	"icon": "assets/vanilla_fashion/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"vanillafashion.VanillaFashion"
-		],
-		"client": [
-			"vanillafashion.client.VanillaFashionClient"
-		]
-	},
-	"mixins": [
-        "vanilla_fashion.mixins.json",
-		{
-			"config": "vanilla_fashion.client.mixins.json",
-			"environment": "client"
-		}
-	],
-	"depends": {
-		"fabricloader": ">=0.19.3",
-		"minecraft": "26.2",
-		"java": ">=25",
-		"fabric-api": ">=0.158.0"
-	}
+  "schemaVersion": 1,
+  "id": "fashion_3790",
+  "version": "${version}",
+  "name": "3790's Fashion",
+  "description": "保持原版视觉与行为风格的服务器权威时装模组。",
+  "license": "MIT",
+  "icon": "assets/fashion_3790/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.zbw3790.fashion.Fashion3790"
+    ],
+    "elytra_slot_3790:visual_compatibility": [
+      "dev.zbw3790.fashion.client.render.ElytraSlotVisualProvider"
+    ],
+    "client": [
+      "dev.zbw3790.fashion.client.Fashion3790Client"
+    ]
+  },
+  "mixins": [
+    "fashion_3790.mixins.json",
+    {
+      "config": "fashion_3790.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "custom": {
+    "elytra_slot_3790:visual_contract": 1
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "fabric-api": ">=0.158.0"
+  },
+  "provides": [
+    "vanilla_fashion"
+  ]
 }

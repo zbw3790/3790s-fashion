@@ -13,14 +13,20 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"vanilla_fashion" {
+		"fashion_3790" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
 	}
 }
 
+// 只在编译和测试使用附属导出的单接口 JAR；不打包、不声明硬运行依赖。
+def visualApi = files(providers.gradleProperty('elytraSlotVisualApiJar')
+    .getOrElse('run/dependencies/3790s-elytra-slot-visual-api-1.jar'))
+
 dependencies {
+    clientCompileOnly visualApi
+    testImplementation visualApi
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
@@ -58,6 +64,22 @@ tasks.named('test') {
 	doFirst {
 		workingDir.mkdirs()
 		// 独立测试 JVM 使用同一实际 classpath 复验 SavedData 重读，不启动 Minecraft。
-		systemProperty 'vanillaFashion.testRuntimeClasspath', sourceSets.test.runtimeClasspath.asPath
+		systemProperty 'fashion3790.testRuntimeClasspath', sourceSets.test.runtimeClasspath.asPath
 	}
 }
+
+// 精确冻结跨项目接口；不扫描、不构建附属，也不把编译 API 打入产物。
+tasks.register('verifyVisualContractApi') {
+    inputs.files(visualApi)
+    doLast {
+        def api = visualApi.singleFile
+        if (!api.isFile()) throw new GradleException('缺少 Visual Contract v1 API JAR，请设置 elytraSlotVisualApiJar。')
+        def bytes = api.bytes
+        def sha = java.security.MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString()
+        if (bytes.length != 1410 || sha != 'f1722277bd6301cd22c43c01ddc3ce325917cb19a08bc2d91e8bd02ee2dbe096') {
+            throw new GradleException('Visual Contract v1 API JAR 指纹不匹配，禁止使用未知接口。')
+        }
+    }
+}
+tasks.named('compileClientJava') { dependsOn 'verifyVisualContractApi' }
+tasks.named('compileTestJava') { dependsOn 'verifyVisualContractApi' }

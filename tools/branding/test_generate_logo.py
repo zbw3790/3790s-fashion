@@ -24,7 +24,7 @@ PAINTER = logo.ROOT / logo.PAINTER_RELATIVE
 
 class CurrentLogoTest(unittest.TestCase):
     def test_current_pngs_and_metadata_icon_match_regeneration(self) -> None:
-        logo.check_current(logo.ROOT / "branding", logo.ROOT / "src/main/resources/assets/vanilla_fashion/icon.png")
+        logo.check_current(logo.ROOT / "branding", logo.ROOT / "src/main/resources/assets/fashion_3790/icon.png")
 
     def test_palette_has_exact_brand_and_fixed_integer_derivations(self) -> None:
         self.assertEqual("#3790FF", logo.BRAND_BLUE)

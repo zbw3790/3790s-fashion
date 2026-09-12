@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-PAINTER_RELATIVE = "src/client/java/vanillafashion/client/screen/WardrobeGuiPainter.java"
+PAINTER_RELATIVE = "src/client/java/dev/zbw3790/fashion/client/screen/WardrobeGuiPainter.java"
 BRAND_BLUE = "#3790FF"
 BRAND_RGB = (55, 144, 255)
 BACKGROUND = (38, 41, 43, 255)

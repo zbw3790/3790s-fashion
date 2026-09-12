@@ -21,8 +21,8 @@ TEST_ROOT = release.PROJECT_ROOT / "run/release-tooling-tests"
 def jar_bytes(metadata_changes: dict | None = None, extra: tuple[str, ...] = ()) -> bytes:
     metadata = {
         "version": release.VERSION,
-        "name": "3790's Vanilla Style Fashion",
-        "id": "vanilla_fashion",
+        "name": "3790's Fashion",
+        "id": "fashion_3790",
         "license": "MIT",
         "environment": "*",
     }
@@ -30,7 +30,7 @@ def jar_bytes(metadata_changes: dict | None = None, extra: tuple[str, ...] = ())
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w") as archive:
         archive.writestr("fabric.mod.json", json.dumps(metadata))
-        archive.writestr("assets/vanilla_fashion/icon.png", b"icon")
+        archive.writestr("assets/fashion_3790/icon.png", b"icon")
         for name in extra:
             archive.writestr(name, b"fixture")
     return result.getvalue()
@@ -46,6 +46,17 @@ class ReleaseToolingTest(unittest.TestCase):
         if not self.root.is_relative_to(TEST_ROOT.resolve()):
             raise ValueError("临时测试目录不在已验证的输出目录内。")
         self.addCleanup(self.temporary.cleanup)
+
+    def test_installation_readme_uses_explicit_public_template_in_both_layouts(self) -> None:
+        (self.root / "public").mkdir()
+        internal = self.root / "public/INSTALL.md"
+        public = self.root / "INSTALL.md"
+        internal.write_text("安装说明", encoding="utf-8")
+        (self.root / "README.md").write_text("内部开发报告", encoding="utf-8")
+        self.assertEqual(internal, release.installation_readme(self.root))
+        internal.rename(public)
+        self.assertEqual(public, release.installation_readme(self.root))
+        self.assertEqual("安装说明", release.installation_readme(self.root).read_text("utf-8"))
 
     def test_authoritative_version_supports_current_and_future_versions(self) -> None:
         properties = self.root / "gradle.properties"
@@ -97,13 +108,13 @@ class ReleaseToolingTest(unittest.TestCase):
             "build/v02r-design/standard.png",
             "run/latest.log",
             "tests/fixture.txt",
-            "vanillafashion/ReleaseTest.class",
+            "dev/zbw3790/fashion/ReleaseTest.class",
             ".gradle/cache.bin",
             ".git/config",
             ".idea/workspace.xml",
             ".vscode/settings.json",
             "archive/old.bin",
-            "assets/vanilla_fashion/textures/gui/frame.png",
+            "assets/fashion_3790/textures/gui/frame.png",
             "../outside.txt",
             "run\\latest.log",
         ):
@@ -119,7 +130,7 @@ class ReleaseToolingTest(unittest.TestCase):
             release.audit_runtime_jar(duplicate)
 
     def prepare_fixture(self):
-        package_name = f"vanilla-fashion-{release.VERSION}"
+        package_name = f"3790s-fashion-{release.VERSION}"
         jar_name = f"{package_name}.jar"
         jar = self.root / jar_name
         jar.write_bytes(jar_bytes())

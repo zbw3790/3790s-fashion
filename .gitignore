@@ -21,6 +21,8 @@ logs/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.3790s-fashion-public-export
+# 保留旧导出 marker 的忽略规则，历史目录可安全识别。
 .vanilla-fashion-public-export
 
 # 操作系统文件

@@ -1,25 +1,28 @@
-# 3790's Vanilla Style Fashion
+# 3790's Fashion
 
 为 Minecraft Java Edition 26.2 提供服务器本地披风、Outfit 外层装束与 Creative Inventory 风格衣柜：服主准备外观资源，玩家在游戏内预览和选择，保留原版基础皮肤、模型与动作。
 
 ![原创 Outfit 衬衫 Logo](branding/logo-128.png)
 
+项目源码与问题反馈的 canonical 地址为 [GitHub](https://github.com/zbw3790/3790s-fashion)、[Issues](https://github.com/zbw3790/3790s-fashion/issues)；版本变化见 [CHANGELOG](CHANGELOG.md)，独立安装包说明见 [INSTALL](INSTALL.md)。
+
 ## 安装需求
 
-- 当前已发布稳定版本：`v0.3.2`
+- 版本：`0.4.0`
+- Mod ID：`fashion_3790`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
 - Java：`25`；从源码构建需要 JDK 25
 
-客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `vanilla-fashion-0.3.2.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `3790s-fashion-0.4.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
 
-本次 v0.3.2 仅更新品牌视觉：采用原创 Outfit 衬衫 Logo、`#3790FF` 主色和匹配的 Outfit Tab 配色，功能与 v0.3.1 相同。当前 Logo 不再嵌入 Minecraft 原版盔甲架 sprite，图像由确定性脚本生成，未使用 AI。
+v0.4.0 将技术身份统一为 `fashion_3790`，保留现有披风、装束和衣柜行为，并纳入已联合验证的 Elytra Slot Visual Contract v1。继续使用原创 Outfit 衬衫 Logo、`#3790FF` 主色和 Outfit Tab 配色。当前 Logo 不再嵌入 Minecraft 原版盔甲架 sprite，图像由确定性脚本生成，未使用 AI。
 
 ## 这个 Mod 能做什么
 
 - 把原版盔甲架当作衣柜入口：完整原版交互优先，没有原版动作时才打开衣柜，不要求空手或空架。
-- Outfit 支持 PNG-only 资源；服主可执行 `/vanillafashion reload` 手动热重载装束，新端无需重连或重新应用。
+- Outfit 支持 PNG-only 资源；服主可执行 `/fashion3790 reload` 手动热重载装束，新端无需重连或重新应用。
 - Creative Inventory 风格衣柜，支持 Standard / Compact 自适应布局、Cape／Outfit 两页签、4×3 披风列表和 4×2 装束列表。
 - Outfit 可替换头部、身体、左右袖和左右裤腿六个原版外层部位，支持 WIDE／SLIM；可按整套、分组或单部位选择，保留原版、隐藏外层或形成混搭。
 - 在带边框的深灰区域居中预览玩家，切换披风／鞘翅模型无需更换真实装备；支持“原版”选项和分页浏览，垂直跟随更平缓。
@@ -33,7 +36,7 @@
 披风文件由服主保存在服务器本地：
 
 ```text
-config/vanilla-fashion/capes/<cape-id>/
+config/3790s-fashion/capes/<cape-id>/
 ```
 
 每个 `<cape-id>` 目录代表一个可选择的披风。使用以下三种布局之一：
@@ -50,7 +53,7 @@ config/vanilla-fashion/capes/<cape-id>/
 
 ## 服主：添加装束
 
-装束由服主放在服务器本地的 `config/vanilla-fashion/outfits/<outfit-id>/`。v0.3.1 起 `outfit.json` 可选：最简单的目录只需 `wide.png`、`slim.png` 中的一种或两种；不会自动把一种臂宽转换成另一种。
+装束由服主放在服务器本地的 `config/3790s-fashion/outfits/<outfit-id>/`。v0.3.1 起 `outfit.json` 可选：最简单的目录只需 `wide.png`、`slim.png` 中的一种或两种；不会自动把一种臂宽转换成另一种。
 
 PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素，自动确定提供的部位；Base Skin 像素不参与识别。双模型的识别部位必须一致。存在 JSON 时仍使用严格显式模式，错误 JSON 不会改走自动模式；需要显式提供全透明部位时仍须 JSON。
 
@@ -71,10 +74,10 @@ PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素�
 添加、修改或删除 Outfit 后，管理员或服务器控制台可执行：
 
 ```text
-/vanillafashion reload
+/fashion3790 reload
 ```
 
-v0.3.1 及当前客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply；冻结 v0.3.0 客户端在线时继续使用加入时的资源视图，重连后获得最新目录。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
+当前客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
 
 ## 玩家：使用衣柜
 
@@ -91,21 +94,29 @@ v0.3.1 及当前客户端自动更新世界、衣柜 Preview 和网格缩略，�
 - 未安装本 Mod 的原版客户端可以进入安装了本 Mod 的服务器，但不能使用衣柜或显示自定义披风／装束。
 - 安装了本 Mod 的客户端可以进入原版服务器；此时不提供衣柜和服务器时装功能。
 
-v0.3.2 继续使用 schema 2，完整兼容 v0.3.1 保存，保留 v0.3.1 对 v0.3.0 保存的兼容。v0.3.0 起可读取 v0.2.1 的 schema v1 保存，仅发生实际保存修改时写入 schema v2；不要用旧版 Mod 反向读取 v2 保存。当前客户端连接 v0.2.1 服务器时，Cape 正常可用，Outfit 页签提示不支持；v0.2.1 客户端连接当前服务器时，其 Cape 修改不会清除已有装束。
+v0.4.0 保持业务 schema 2。停服并备份后升级：新配置根 `config/3790s-fashion/` 不存在时，从 `config/vanilla-fashion/` 完整复制，保留全部旧文件；新目录已存在则只使用新目录，不合并旧资产。迁移时不要并发修改目录；遇到链接、访问失败或不完整复制会停止启动，避免空 Registry 错误清除选择。
 
-Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。上一稳定版的功能与制品保留在 [v0.3.1 Release](https://github.com/zbw3790/3790s-vanilla-style-fashion/releases/tag/v0.3.1)。
+世界保存由 `data/vanilla_fashion/player_fashion.dat` 验证后复制到 `data/fashion_3790/player_fashion.dat`，只注册新位置的一份权威状态，保留旧文件。坏文件不会被默认状态覆盖，新位置优先且不会因坏文件回退旧副本。Cape／Outfit ID、Original、None、dormant 与玩家记录原样保留。旧 schema v1 继续在实际修改后才写成 v2，不增加 schema 3。新路径使用后旧副本不再同步，降级前必须自行恢复正确备份，不能直接把旧副本当成最新存档。
+
+客户端缓存改用 `3790s-fashion/cache/`，由服务器提供的内容重新建立，旧缓存不删除。所有网络频道使用 `fashion_3790:*`，不提供 v0.4.0 与 v0.3.x 的跨版本 Fashion 联网；客户端与服务器应一起升级。`provides: vanilla_fashion` 只是 Fabric 依赖别名，不是旧协议桥接。
+
+可选兼容 **3790's Elytra Slot 0.1.0**（Visual Contract v1）。附属需另行安装，不随主 Mod 分发，也不是主 Mod 必需依赖。其 `elytra_slot_3790:visual_contract = 1`、`elytra_slot_3790:visual_compatibility` 及接口语义保持。主 Mod 不负责真实 BODY 槽位或翼部提交，不复制附属功能。
+
+Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。历史 v0.3.x 功能与制品仍保留在原版本 Tag／Release，不能将旧网络兼容矩阵当作 v0.4.0 的跨版本承诺。
 
 详细的双向兼容行为见[兼容性说明](docs/compatibility.md)。
 
 ## 开发者构建
 
+需要已核验的 Visual Contract v1 单接口编译 JAR（仅 compile/test，不随主 Mod 分发）：1410 bytes，SHA-256 `f1722277bd6301cd22c43c01ddc3ce325917cb19a08bc2d91e8bd02ee2dbe096`。从接口 owner 获取已核验的编译制品后显式传入路径；源码导出不携带该 JAR，不会下载未知接口，也不会访问相邻附属工作树。缺少它时构建明确失败。该外部编译输入目前由接口 owner 单独提供；开发者公开分发延期，不影响用户安装主 Mod，也不应安装进游戏 mods。Java package 为 `dev.zbw3790.fashion`，Maven group 为 `dev.zbw3790`。
+
 Windows PowerShell：
 
 ```powershell
-.\gradlew.bat clean build --console=plain
+.\gradlew.bat -PelytraSlotVisualApiJar=C:/path/3790s-elytra-slot-visual-api-1.jar clean build --console=plain
 ```
 
-正式 Mod JAR 输出到 `build/libs/vanilla-fashion-0.3.2.jar`。
+正式 Mod JAR 输出到 `build/libs/3790s-fashion-0.4.0.jar`。
 
 如需重建包含 README、许可证和 Cape 模板的完整发布 ZIP：
 

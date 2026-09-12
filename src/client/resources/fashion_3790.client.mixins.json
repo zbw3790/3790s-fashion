@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.zbw3790.fashion.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"WingsLayerMixin",
+		"ItemInHandRendererMixin",
+		"LivingEntityRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

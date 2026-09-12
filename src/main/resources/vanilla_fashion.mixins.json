@@ -1,8 +1,0 @@
-{
-    "required": true,
-    "minVersion": "0.8",
-    "package": "vanillafashion.mixin",
-    "compatibilityLevel": "JAVA_25",
-    "mixins": ["PlayerInteractionMixin"],
-    "injectors": {"defaultRequire": 1}
-}

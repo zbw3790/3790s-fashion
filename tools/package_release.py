@@ -1,4 +1,4 @@
-"""根据项目权威版本生成并审计 Vanilla Fashion 的确定性完整发布包。"""
+"""根据项目权威版本生成并审计 3790's Fashion 的确定性完整发布包。"""
 
 from __future__ import annotations
 
@@ -32,13 +32,19 @@ def read_project_version(properties_path: Path) -> str:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VERSION = read_project_version(PROJECT_ROOT / "gradle.properties")
-PACKAGE_NAME = f"vanilla-fashion-{VERSION}"
+PACKAGE_NAME = f"3790s-fashion-{VERSION}"
 JAR_NAME = f"{PACKAGE_NAME}.jar"
 JAR_PATH = PROJECT_ROOT / "build/libs" / JAR_NAME
 RELEASE_ROOT = PROJECT_ROOT / "build/release"
 PACKAGE_DIRECTORY = RELEASE_ROOT / PACKAGE_NAME
 ZIP_PATH = RELEASE_ROOT / f"{PACKAGE_NAME}-release.zip"
-README_PATH = PROJECT_ROOT / "README.md"
+def installation_readme(project_root: Path) -> Path:
+    """内外仓共用安装说明，不把内部开发报告链接打入用户安装包。"""
+    internal = project_root / "public/INSTALL.md"
+    return internal if internal.is_file() else project_root / "INSTALL.md"
+
+
+README_PATH = installation_readme(PROJECT_ROOT)
 LICENSE_PATH = PROJECT_ROOT / "LICENSE"
 VALIDATOR_SOURCE = PROJECT_ROOT / "tools/PackageReleaseValidator.java"
 MAIN_CLASSES = PROJECT_ROOT / "build/classes/java/main"
@@ -284,7 +290,7 @@ def audit_runtime_jar(jar_bytes: bytes) -> None:
                 forbidden.append(name)
             elif path.name.lower() in {value.lower() for value in FORBIDDEN_NAMES}:
                 forbidden.append(name)
-            elif path.suffix.lower() == ".png" and name != "assets/vanilla_fashion/icon.png":
+            elif path.suffix.lower() == ".png" and name != "assets/fashion_3790/icon.png":
                 forbidden.append(name)
         if forbidden:
             raise ValueError(f"Runtime JAR 包含发布禁用内容：{sorted(set(forbidden))}")
@@ -293,8 +299,8 @@ def audit_runtime_jar(jar_bytes: bytes) -> None:
         metadata = json.loads(archive.read("fabric.mod.json"))
         expected = {
             "version": VERSION,
-            "name": "3790's Vanilla Style Fashion",
-            "id": "vanilla_fashion",
+            "name": "3790's Fashion",
+            "id": "fashion_3790",
             "license": "MIT",
             "environment": "*",
         }

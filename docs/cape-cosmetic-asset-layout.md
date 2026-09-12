@@ -5,7 +5,7 @@
 每个 Cape Cosmetic 是服务器目录中的一个直接子目录：
 
 ```text
-config/vanilla-fashion/capes/<id>/
+config/3790s-fashion/capes/<id>/
 ```
 
 `<id>` 长度为 1～64。首字符必须匹配 `[a-z0-9]`，其余字符只能使用小写英文字母、数字、下划线、连字符或点，即整体匹配：
@@ -54,7 +54,7 @@ Mod 不会自动缩放、裁剪或转换不合格纹理。
 ## 安装步骤
 
 1. 从 [`templates/capes/`](../templates/capes/) 选择一个完整模板目录。
-2. 将目录复制到服务器的 `config/vanilla-fashion/capes/`。
+2. 将目录复制到服务器的 `config/3790s-fashion/capes/`。
 3. 如需重命名目录，确保新名称符合 ID 规则。
 4. 编辑 recognized PNG，同时保持文件名、尺寸、格式、大小和 Vanilla UV 合法。
 5. 启动或重启服务器。

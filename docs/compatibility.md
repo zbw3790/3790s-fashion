@@ -1,6 +1,18 @@
 # 兼容性说明
 
-## 支持矩阵
+## 当前 v0.4.0
+
+当前品牌为 3790's Fashion，真实 MOD ID 与频道 namespace 为 `fashion_3790`。完整功能需要双端均使用 v0.4.0；不承诺 v0.3.x 跨版本 Fashion 联网，不发送旧 namespace 的双协议。Fabric 提供 `vanilla_fashion` 依赖别名仅为旧依赖识别。
+
+保持原版服务器／客户端的 capability 防护设计；已有 Fresh、真实 v0.3.2 配置／存档迁移和新根优先的人工 Runtime 证据；不把旧 True Vanilla 矩阵冒充本版重新测试。可选 3790's Elytra Slot 0.1.0 已通过 Owner／Observer、装备保存／重连及 Preview 的联合 Runtime，使用冻结 Visual Contract v1，额外 BODY 翼层由附属所有，主 Mod 提供 linked Elytra 外观与 Preview 隔离。没有新增 Armor 时装或槽位功能。
+
+配置、SavedData 和缓存迁移见 [README](../README.md#与原版兼容)。命令为 `/fashion3790 reload`，只重载 Outfit。业务 schema 保持 2，原版／无外层、部分装束和休眠引用语义不变。
+
+## v0.3.x 历史兼容记录
+
+以下是旧版本曾验证的矩阵与原命令，不作为 v0.4.0 跨版本网络承诺。
+
+### 历史支持矩阵
 
 | 客户端 | 服务器 | 行为 |
 | --- | --- | --- |
@@ -16,7 +28,7 @@
 
 “原版”表示实际客户端或服务器进程没有加载 Fabric Loader、Fabric API、Vanilla Fashion 或其他 Mod Loader。
 
-## 双端安装
+### 历史双端安装
 
 完整功能需要客户端和服务器同时安装：
 
@@ -26,13 +38,13 @@
 
 服务器不会强制所有连接安装本 Mod。未安装的玩家不能打开衣柜或提交新选择，但其 UUID 对应的既有服务器权威状态不会仅因客户端缺少 Mod 而自动删除；其他已安装客户端仍可看到有效外观。
 
-## 连接隔离
+### 历史连接隔离
 
 客户端在每次新连接开始和断开时清理当前连接的临时 Registry、资源请求、纹理和玩家状态。磁盘内容缓存可以复用，但不能自行授权或激活旧服务器内容。
 
 连接到不支持本 Mod 的服务器时，盔甲架保持原版交互，世界渲染保持原版 pass-through。服务器只会向明确支持对应频道的客户端发送 Vanilla Fashion Payload。
 
-## Outfit 手动重载与旧客户端
+### 历史 Outfit 手动重载与旧客户端
 
 v0.3.1 服务器支持管理员／控制台 `/vanillafashion reload`。支持 Refresh 的 v0.3.1 客户端在同一连接中更新资源目录、世界外观、Preview 与二维缩略，不需要重新应用选择。PNG-only Outfit 在服务器解析后沿用正式装束定义与资产传输。
 
@@ -40,12 +52,12 @@ v0.3.1 服务器支持管理员／控制台 `/vanillafashion reload`。支持 Re
 
 可信删除只清除引用已删除装束的部位，保留 Cape 与其他部位；存在但无效的资源保留 stored 引用并回退。资源根目录不可用时保留原有资源和状态。
 
-## 已知限制
+### 历史已知限制
 
 - Cape 定义仍在服务器启动时加载；Cape 变化需要重启服务器。Outfit 支持 v0.3.1 手动 reload，不支持文件实时监听或热重载 GUI。
 - 不提供资源上传、编辑、权限或 entitlement 系统，不包含 Elytra Slot 附属或 Armor Visual。
 - Elytra 纹理属于 Cape Cosmetic 的绑定资源，不是独立时装槽。
 
-## 保存兼容
+### 历史保存兼容
 
 v0.3.1 继续使用 schema 2，直接兼容 v0.3.0 保存，没有新增保存 schema。v0.3.0 起读取 v0.2.1 的 schema v1 保存；实际修改时写入同时包含 Cape 和六部位 Outfit 的 schema v2。仅加载旧保存不会立即迁移。旧版 Mod 不能反向读取 v2 保存，升级前应备份世界。
