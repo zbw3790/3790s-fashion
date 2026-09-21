@@ -126,8 +126,8 @@ class WardrobeS04InteractionTest {
     void keyboardVisitsOrderedControlsBothDirectionsAndArrowsStayInGrid(int width) {
         var f=new WardrobeS04Fixture();var screen=f.open();screen.resize(width,240);screen.selectTab(WardrobeScreen.SelectedTab.OUTFIT);
         screen.setFocused(null);var sequence=new ArrayList<String>();
-        for (int i=0;i<6;i++) { assertTrue(screen.keyPressed(new KeyEvent(258,0,0)));sequence.add(((AbstractWidget)screen.getFocused()).getMessage().getString()); }
-        assertEquals(List.of("披风","装束","当前预览：披风；点击查看鞘翅","整套","原版","无外层"),sequence);
+        for (int i=0;i<7;i++) { assertTrue(screen.keyPressed(new KeyEvent(258,0,0)));sequence.add(((AbstractWidget)screen.getFocused()).getMessage().getString()); }
+        assertEquals(List.of("披风","装束",WardrobeScreen.SelectedTab.ARMOR.label(),"当前预览：披风；点击查看鞘翅","整套","原版","无外层"),sequence);
         screen.keyPressed(new KeyEvent(258,0,1));assertEquals("原版",((AbstractWidget)screen.getFocused()).getMessage().getString());
         var first=screen.children().stream().filter(OutfitGridEntryWidget.class::isInstance).map(OutfitGridEntryWidget.class::cast).findFirst().orElseThrow();
         screen.setFocused(first);screen.keyPressed(new KeyEvent(264,0,0));

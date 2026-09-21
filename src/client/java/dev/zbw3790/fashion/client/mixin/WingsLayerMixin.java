@@ -13,6 +13,14 @@ import dev.zbw3790.fashion.client.render.ElytraTextureOverrideResolver;
 
 @Mixin(WingsLayer.class)
 abstract class WingsLayerMixin {
+    // 只替换本层局部参数；身体及其他层仍持有真实胸甲副本，原版翼逻辑只执行一次。
+    @org.spongepowered.asm.mixin.injection.ModifyVariable(
+            method="submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/client/renderer/entity/state/HumanoidRenderState;FF)V",
+            at=@At("HEAD"),argsOnly=true)
+    private HumanoidRenderState fashion3790$previewWings(HumanoidRenderState state) {
+        return dev.zbw3790.fashion.client.render.WardrobePreviewWings.forLayer(state);
+    }
+
 	@Inject(
 			method = "getPlayerElytraTexture(Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)"
 					+ "Lnet/minecraft/resources/Identifier;",

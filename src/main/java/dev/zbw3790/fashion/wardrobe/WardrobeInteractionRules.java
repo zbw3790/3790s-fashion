@@ -8,7 +8,7 @@ import net.minecraft.world.entity.player.Player;
 public final class WardrobeInteractionRules {
     private WardrobeInteractionRules() { }
     public static boolean isWardrobeCandidate(Player player, Entity target, InteractionResult finalResult) {
-        return matches(target instanceof ArmorStand,player.isSpectator(),finalResult);
+        return !player.isSecondaryUseActive() && matches(target instanceof ArmorStand,player.isSpectator(),finalResult);
     }
     static boolean matches(boolean armorStand, boolean spectator, InteractionResult finalResult) {
         return armorStand && !spectator && finalResult==InteractionResult.PASS;

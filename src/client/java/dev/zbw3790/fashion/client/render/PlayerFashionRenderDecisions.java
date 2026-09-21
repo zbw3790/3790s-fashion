@@ -10,11 +10,13 @@ public final class PlayerFashionRenderDecisions {
 	}
 
 	public static boolean allowVanillaCape(AvatarRenderState state) {
+        if (WardrobePreviewWings.active(state)) return false;
 		return WardrobePreviewRenderDecisions.allowVanillaCape(
 				WardrobePreviewRenderState.find(state), !PlayerFashionRenderState.find(state).suppressesVanillaCape());
 	}
 
 	public static Optional<Identifier> capeTexture(AvatarRenderState state) {
+        if (WardrobePreviewWings.active(state)) return Optional.empty();
 		return WardrobePreviewRenderDecisions.capeTexture(
 				WardrobePreviewRenderState.find(state), () -> PlayerFashionRenderState.find(state).capeTexture());
 	}

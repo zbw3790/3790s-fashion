@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import dev.zbw3790.fashion.outfit.*;
+import dev.zbw3790.fashion.armor.*;
 import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.client.fashion.FullFashionDraft;
 import dev.zbw3790.fashion.cape.CapeId;
@@ -124,16 +125,28 @@ public final class WardrobeSelectionSession {
 
     public boolean canFinishFull(boolean canSend, boolean receiverReady, boolean outstanding,
             Predicate<CapeId> capeAdmitted, BiPredicate<OutfitPart,OutfitId> outfitAdmitted) {
+        return canFinishFull(canSend,receiverReady,outstanding,capeAdmitted,outfitAdmitted,(slot,id) -> false);
+    }
+    public boolean canFinishFull(boolean canSend, boolean receiverReady, boolean outstanding,
+            Predicate<CapeId> capeAdmitted, BiPredicate<OutfitPart,OutfitId> outfitAdmitted,
+            BiPredicate<ArmorSlot,ArmorStyleId> armorAdmitted) {
         return v2 && fullDraft!=null && canEdit() && dirty() && !conflict()
                 && !persistenceReadOnly && fullError.filter(value -> value==FullFashionSelectionStatus.INVALID_CAPE
-                        || value==FullFashionSelectionStatus.INVALID_OUTFIT_SELECTION).isEmpty()
+                        || value==FullFashionSelectionStatus.INVALID_OUTFIT_SELECTION
+                        || value==FullFashionSelectionStatus.INVALID_ARMOR_SELECTION).isEmpty()
                 && !outstanding && canSend && receiverReady
-                && WardrobeApplyAdmission.changedFields(fullDraft.baseline().stored(),fullDraft.draft(),capeAdmitted,outfitAdmitted);
+                && WardrobeApplyAdmission.changedFields(fullDraft.baseline().stored(),fullDraft.draft(),capeAdmitted,outfitAdmitted,armorAdmitted);
     }
     public Optional<dev.zbw3790.fashion.network.SetFullFashionSelectionPayload> finishFull(
             dev.zbw3790.fashion.client.network.ClientFullFashionRequestTracker tracker, boolean canSend, boolean receiverReady,
             Predicate<CapeId> capeAdmitted, BiPredicate<OutfitPart,OutfitId> outfitAdmitted) {
-        if (!canFinishFull(canSend,receiverReady,tracker.hasOutstanding(),capeAdmitted,outfitAdmitted)) return Optional.empty();
+        return finishFull(tracker,canSend,receiverReady,capeAdmitted,outfitAdmitted,(slot,id) -> false);
+    }
+    public Optional<dev.zbw3790.fashion.network.SetFullFashionSelectionPayload> finishFull(
+            dev.zbw3790.fashion.client.network.ClientFullFashionRequestTracker tracker, boolean canSend, boolean receiverReady,
+            Predicate<CapeId> capeAdmitted, BiPredicate<OutfitPart,OutfitId> outfitAdmitted,
+            BiPredicate<ArmorSlot,ArmorStyleId> armorAdmitted) {
+        if (!canFinishFull(canSend,receiverReady,tracker.hasOutstanding(),capeAdmitted,outfitAdmitted,armorAdmitted)) return Optional.empty();
         var id=tracker.allocate(); if (id.isEmpty()) return Optional.empty();
         pendingRequestId=id.getAsLong(); pendingTicks=0; fullError=Optional.empty();
         return Optional.of(new dev.zbw3790.fashion.network.SetFullFashionSelectionPayload(pendingRequestId,fullDraft.baseline().revision(),fullDraft.draft()));
@@ -155,8 +168,30 @@ public final class WardrobeSelectionSession {
     }
     private void editOutfit(OutfitSelections value) {
         if (value.equals(fullDraft.draft().outfit())) return;
-        fullDraft.edit(new PlayerFashionStoredState(fullDraft.draft().cape(),value));
+        fullDraft.edit(fullDraft.draft().withOutfit(value));
         fullError=Optional.empty(); lastError=Optional.empty();
+    }
+    /** 整体 CUSTOM 只作用于声明槽与目标槽的交集，其他草稿字段保持。 */
+    public void selectArmor(Set<ArmorSlot> targets, ArmorStyleId id, Set<ArmorSlot> provided) {
+        if (!v2 || !canEdit()) return;
+        var next=fullDraft.draft().armor();
+        for (var slot:targets) if (provided.contains(slot)) next=next.with(slot,ArmorSelection.custom(id));
+        editArmor(next);
+    }
+    public void clearArmor(Set<ArmorSlot> targets, ArmorSelection builtin) {
+        if (builtin instanceof ArmorSelection.Custom) throw new IllegalArgumentException("清除只接受原版或隐藏。");
+        if (!v2 || !canEdit()) return;
+        var next=fullDraft.draft().armor();
+        for (var slot:targets) next=next.with(slot,builtin);
+        editArmor(next);
+    }
+    private void editArmor(ArmorSelections value) {
+        if (value.equals(fullDraft.draft().armor())) return;
+        fullDraft.edit(fullDraft.draft().withArmor(value));
+        fullError=Optional.empty();lastError=Optional.empty();
+    }
+    boolean armorConflict(ArmorSlot slot) {
+        return v2 && fullDraft!=null && fullDraft.conflicts().contains(FullFashionDraft.Field.values()[slot.ordinal()+7]);
     }
     public boolean reloadAuthority() {
         if (!v2 || !canEdit() || fullDraft==null) return false;
@@ -219,6 +254,7 @@ public final class WardrobeSelectionSession {
         if (persistenceReadOnly) return "服务器时装存档当前只读";
         if (fullError.isPresent()) return switch (fullError.orElseThrow()) {
             case SUCCESS -> ""; case CONFLICT -> "存在外部修改，请检查";
+            case INVALID_ARMOR_SELECTION -> "盔甲选择已失效，请重新选择";
             case INVALID_CAPE -> "该披风当前不可用"; case INVALID_OUTFIT_SELECTION -> "装束选择已失效，请重新选择";
             case SERVICE_UNAVAILABLE -> "时装服务当前不可用"; case READ_ONLY_PERSISTENCE -> "服务器时装存档当前只读";
             case PROTOCOL_REJECT -> "当前连接不支持完整时装提交"; case STORAGE_LIMIT -> "服务器时装数据已达上限";
@@ -258,7 +294,7 @@ public final class WardrobeSelectionSession {
         return pendingTicks >= 200 ? "尚未收到服务器确认，状态以服务器为准" : "正在保存…";
     }
 
-    /** 主状态被冲突或拒绝占用时，两个 Tab 共用的补充事实仍保留尚未确认。 */
+    /** 主状态被冲突或拒绝占用时，三个 Tab 共用的补充事实仍保留尚未确认。 */
     List<String> supplementalStatus() {
         if (!hasError() || !waiting()) return List.of();
         return List.of(pendingRequestId != 0 && pendingTicks < 200

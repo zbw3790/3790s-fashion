@@ -5,7 +5,6 @@ import java.util.function.Predicate;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.joml.Quaternionf;
 
 record WardrobePreviewConfiguration(WardrobePreviewMode mode, float verticalTiltDegrees) {
@@ -37,9 +36,8 @@ record WardrobePreviewConfiguration(WardrobePreviewMode mode, float verticalTilt
 		Objects.requireNonNull(state, "预览专用玩家状态不能为空。");
 		Objects.requireNonNull(hasWings, "预览装备层查询不能为空。");
 		// 调用方每次通过 createRenderState 创建独立状态；不修改实体取得的 ItemStack。
-		state.chestEquipment = mode == WardrobePreviewMode.ELYTRA
-				? new ItemStack(Items.ELYTRA)
-				: hasWings.test(state.chestEquipment) ? ItemStack.EMPTY : state.chestEquipment.copy();
+		state.chestEquipment = mode == WardrobePreviewMode.CAPE && hasWings.test(state.chestEquipment)
+                ? ItemStack.EMPTY : state.chestEquipment.copy();
 		state.xRot = -verticalTiltDegrees;
 
 		if (mode == WardrobePreviewMode.ELYTRA) {

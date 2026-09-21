@@ -34,19 +34,13 @@ public final class OutfitAssetRequestTracker {
     public void clear() { connections.clear(); }
     public List<String> claim(Object connection, OutfitAssetRequestPayload payload) {
         Budget budget = connections.get(connection);
-        if (budget == null || budget.exhausted) return List.of();
-        if (payload.sha256Hashes().size() > MAX_ATTEMPTS-budget.attempts) { budget.attempts=MAX_ATTEMPTS; budget.exhausted=true; return List.of(); }
-        budget.attempts += payload.sha256Hashes().size();
-        var accepted = new LinkedHashSet<String>();
-        for (String hash : payload.sha256Hashes()) if (budget.authorized.contains(hash) && !budget.sent.contains(hash)) accepted.add(hash);
-        if (accepted.size() > MAX_UNIQUE-budget.sent.size()) { budget.exhausted=true; return List.of(); }
-        budget.sent.addAll(accepted); return List.copyOf(accepted);
+        return budget==null ? List.of() : budget.requests.claim(payload.sha256Hashes(),budget.authorized);
     }
     public int connectionCount() { return connections.size(); }
-    public int attempts(Object connection) { var budget=connections.get(connection); return budget == null ? 0 : budget.attempts; }
-    public int sentCount(Object connection) { var budget=connections.get(connection); return budget == null ? 0 : budget.sent.size(); }
+    public int attempts(Object connection) { var budget=connections.get(connection); return budget == null ? 0 : budget.requests.attempts(); }
+    public int sentCount(Object connection) { var budget=connections.get(connection); return budget == null ? 0 : budget.requests.sentCount(); }
     private static final class Budget {
-        private ConnectionOutfitAssetView view; private Set<String> authorized; private final Set<String> sent=new HashSet<>(); private int attempts; private boolean exhausted;
+        private ConnectionOutfitAssetView view; private Set<String> authorized; private final AssetRequestBudget requests=new AssetRequestBudget(MAX_UNIQUE,MAX_ATTEMPTS);
         private Budget(Set<String> authorized) { this.authorized=authorized; }
     }
 }

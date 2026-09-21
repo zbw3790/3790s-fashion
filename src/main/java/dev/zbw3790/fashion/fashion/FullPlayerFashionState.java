@@ -1,6 +1,7 @@
 package dev.zbw3790.fashion.fashion;
 
 import java.util.Objects;
+import dev.zbw3790.fashion.armor.*;
 import dev.zbw3790.fashion.outfit.OutfitPart;
 import dev.zbw3790.fashion.outfit.OutfitPartSelection;
 
@@ -8,6 +9,12 @@ import dev.zbw3790.fashion.outfit.OutfitPartSelection;
 public record FullPlayerFashionState(PlayerFashionStoredState stored, PlayerFashionEffectiveState effective, long revision) {
     public FullPlayerFashionState {
         Objects.requireNonNull(stored, "保存状态不能为 null。"); Objects.requireNonNull(effective, "有效状态不能为 null。");
+        for (var slot : ArmorSlot.CANONICAL_ORDER) {
+            var selected=stored.armor().get(slot); var visible=effective.armor().get(slot);
+            if (selected instanceof ArmorSelection.Custom) {
+                if (!visible.equals(selected) && visible!=ArmorSelection.ORIGINAL) throw new IllegalArgumentException("有效盔甲只能激活自身或回退原版。");
+            } else if (!selected.equals(visible)) throw new IllegalArgumentException("盔甲内建视觉意图必须直接生效。");
+        }
         if (revision < 0) throw new IllegalArgumentException("权威版本不能为负数。");
         if (effective.cape().isPresent() && !effective.cape().equals(stored.cape())) throw new IllegalArgumentException("有效披风必须来自同一保存选择。");
         for (OutfitPart part : OutfitPart.CANONICAL_ORDER) {

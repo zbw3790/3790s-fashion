@@ -20,7 +20,7 @@ public final class WardrobeInteractionHandler {
     }
     static InteractionResult fallback(InteractionResult original, boolean candidate, boolean client, boolean available, BooleanSupplier open) {
         if (!candidate || original!=InteractionResult.PASS) return original;
-        // 无挥手、无物品使用语义；客户端仅消费后续分支，界面仍由服务器消息打开。
-        return (client?available:open.getAsBoolean()) ? InteractionResult.CONSUME.withoutItem() : original;
+        // 由原版服务端成功路径按本次交互手挥动；客户端只消费，不另发动作或物品使用。
+        return (client?available:open.getAsBoolean()) ? InteractionResult.SUCCESS_SERVER.withoutItem() : original;
     }
 }

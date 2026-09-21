@@ -28,8 +28,9 @@ class OutfitSourceBoundaryTest {
         }
         String initializer=Files.readString(root().resolve("src/client/java/dev/zbw3790/fashion/client/Fashion3790Client.java"));
         assertTrue(initializer.contains("NetworkOutfitAppearanceProvider(PLAYER_FASHIONS"));
-        assertTrue(initializer.contains("NetworkOutfitAppearanceProvider.exclusive("));
-        assertTrue(initializer.contains("production, dev.zbw3790.fashion.client.dev.spike.OutfitSpikeHarness.register()"));
+        assertFalse(initializer.contains("NetworkOutfitAppearanceProvider.exclusive("));
+        assertTrue(initializer.contains("OutfitRendering.register(production)"));
+        assertFalse(initializer.contains("OutfitSpikeHarness"));
     }
     private static Path root(){for(Path path=Path.of(System.getProperty("user.dir")).toAbsolutePath();path!=null;path=path.getParent())
         if(Files.exists(path.resolve("settings.gradle")))return path;throw new IllegalStateException("找不到项目根目录。");}

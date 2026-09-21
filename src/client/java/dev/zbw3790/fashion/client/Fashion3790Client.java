@@ -24,6 +24,8 @@ public final class Fashion3790Client implements ClientModInitializer {
     private static final dev.zbw3790.fashion.client.outfit.ClientOutfitTextureManager OUTFIT_TEXTURES = new dev.zbw3790.fashion.client.outfit.ClientOutfitTextureManager();
     private static final dev.zbw3790.fashion.client.outfit.ClientOutfitAssetSync OUTFIT_SYNC = new dev.zbw3790.fashion.client.outfit.ClientOutfitAssetSync(
             OUTFIT_REGISTRY, OUTFIT_ASSETS, dev.zbw3790.fashion.client.outfit.ClientOutfitAssetCache.fromGameDirectory(FabricLoader.getInstance().getGameDir(), LOGGER));
+    private static final dev.zbw3790.fashion.client.armor.ClientArmorResources ARMOR = new dev.zbw3790.fashion.client.armor.ClientArmorResources(FabricLoader.getInstance().getGameDir(),LOGGER);
+    public static dev.zbw3790.fashion.client.armor.ClientArmorResources armorResources() {return ARMOR;}
     private static final ClientCapeRegistry CAPE_REGISTRY = new ClientCapeRegistry();
 	private static final ClientPlayerFashionRegistry PLAYER_FASHIONS = new ClientPlayerFashionRegistry();
 	private static final ClientCapeAssetStore CAPE_ASSET_STORE = new ClientCapeAssetStore();
@@ -49,13 +51,15 @@ public final class Fashion3790Client implements ClientModInitializer {
 				LOGGER
 		);
 		dev.zbw3790.fashion.client.network.ClientFullFashionNetworking.register(PLAYER_FASHIONS, OUTFIT_REGISTRY, OUTFIT_ASSETS, OUTFIT_SYNC, OUTFIT_TEXTURES, LOGGER);
-        PlayerFashionWorldRendering.register(new PlayerFashionAppearanceResolver(
-				PLAYER_FASHIONS, CAPE_REGISTRY, CAPE_TEXTURE_RESOLVER));
+        dev.zbw3790.fashion.client.network.ClientArmorNetworking.register(ARMOR,LOGGER);
+        var appearances = new PlayerFashionAppearanceResolver(PLAYER_FASHIONS, CAPE_REGISTRY, CAPE_TEXTURE_RESOLVER);
+        PlayerFashionWorldRendering.register(appearances);
+        dev.zbw3790.fashion.client.render.InventoryFashionRendering.register(PLAYER_FASHIONS, appearances);
 		Fashion3790CapeRendering.register(LOGGER);
+        dev.zbw3790.fashion.client.render.armor.ArmorRendering.register(PLAYER_FASHIONS,ARMOR);
 		var production = new dev.zbw3790.fashion.client.render.outfit.NetworkOutfitAppearanceProvider(PLAYER_FASHIONS,
                 new dev.zbw3790.fashion.client.outfit.ClientOutfitTextureResolver(OUTFIT_REGISTRY, OUTFIT_ASSETS, OUTFIT_TEXTURES));
-        dev.zbw3790.fashion.client.render.outfit.OutfitRendering.register(dev.zbw3790.fashion.client.render.outfit.NetworkOutfitAppearanceProvider.exclusive(
-                production, dev.zbw3790.fashion.client.dev.spike.OutfitSpikeHarness.register()));
+        dev.zbw3790.fashion.client.render.outfit.OutfitRendering.register(production);
 
 		LOGGER.info("3790's Fashion 客户端初始化完成，资产链、玩家时装同步与世界外观提取已注册。");
 	}

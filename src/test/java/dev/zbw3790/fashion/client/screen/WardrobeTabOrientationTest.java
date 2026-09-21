@@ -51,7 +51,7 @@ class WardrobeTabOrientationTest {
     @ParameterizedTest @EnumSource(WardrobeScreen.SelectedTab.class)
     void repeatingTheActiveTabByPointerOrKeyboardDoesNotChangeManualYaw(WardrobeScreen.SelectedTab tab) {
         var f = new WardrobeS04Fixture(); var screen = f.open(); screen.selectTab(tab); dragTo(screen, 47.0F);
-        var before = unchangedState(f, screen); var active = button(screen, tab.label);
+        var before = unchangedState(f, screen); var active = button(screen, tab.label());
         // 直接使用控件 onClick，绕开普通 JVM 中不存在的游戏 SoundManager。
         active.onClick(mouse(active.getX() + 8, active.getY() + 8), false);
         assertEquals(47.0F, screen.previewRotation().yawDegrees());
@@ -197,7 +197,7 @@ class WardrobeTabOrientationTest {
         f.capes.replace(new CapeRegistrySnapshot(capes)); return f;
     }
     private static void activateTab(WardrobeScreen screen, WardrobeScreen.SelectedTab tab, int key) {
-        screen.setFocused(button(screen, tab.label)); assertTrue(screen.keyPressed(new KeyEvent(key, 0, 0)));
+        screen.setFocused(button(screen, tab.label())); assertTrue(screen.keyPressed(new KeyEvent(key, 0, 0)));
         assertEquals(tab, screen.selectedTab());
     }
     private static WardrobePreviewModeButton modeButton(WardrobeScreen screen) {

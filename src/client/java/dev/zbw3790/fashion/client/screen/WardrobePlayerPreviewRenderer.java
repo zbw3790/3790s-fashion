@@ -51,6 +51,7 @@ final class WardrobePlayerPreviewRenderer {
 		state.shadowPieces.clear();
 		state.outlineColor = 0;
 		WardrobePreviewRenderState.attach(state, appearance);
+        dev.zbw3790.fashion.client.render.armor.ArmorRendering.attach(state, draft.map(WardrobePreviewDraft::armor).orElse(dev.zbw3790.fashion.armor.ArmorSelections.original()));
 
 		Quaternionf cameraOrientation = configuration.cameraOrientation();
 		Quaternionf modelRotation = new Quaternionf().rotateZ((float) Math.PI).mul(cameraOrientation);
@@ -76,6 +77,7 @@ final class WardrobePlayerPreviewRenderer {
 		if (draft.isPresent()) dev.zbw3790.fashion.client.render.outfit.OutfitRendering.preparePreview(state,player.getUUID(),
                 draft.orElseThrow().provider(outfits.connection(),player.getUUID(),outfits.textures));
         else dev.zbw3790.fashion.client.render.outfit.OutfitRendering.preparePreview(state,player.getUUID());
+        dev.zbw3790.fashion.client.render.WardrobePreviewWings.attach(state, mode == WardrobePreviewMode.ELYTRA);
 		graphics.entity(
 				state,
 				entitySize,

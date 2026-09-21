@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import dev.zbw3790.fashion.cape.CapeId;
 import dev.zbw3790.fashion.cape.CapeRegistryKnowledge;
 import dev.zbw3790.fashion.outfit.*;
+import dev.zbw3790.fashion.armor.*;
 
 /** 每个存档唯一的聚合服务；所有调用在服务器线程，运行期版本只随在线 membership 存在。 */
 public final class PlayerFashionService {
@@ -16,6 +17,7 @@ public final class PlayerFashionService {
     private final Map<UUID, Membership> online = new LinkedHashMap<>();
     private CapeRegistryKnowledge registry;
     private Optional<OutfitRegistryLoadResult> outfits = Optional.empty();
+    private ArmorRegistryLoadResult armor=ArmorRegistryLoadResult.unavailable("盔甲 Registry 尚未加载。");
     private boolean stopped;
     private long registryGeneration;
 
@@ -106,6 +108,12 @@ public final class PlayerFashionService {
             if (outfits.isEmpty() || !outfits.orElseThrow().knowledge().trustworthy()) return outcome(id, FullFashionSelectionStatus.SERVICE_UNAVAILABLE, false);
             if (!active(outfit.id(), part)) return outcome(id, FullFashionSelectionStatus.INVALID_OUTFIT_SELECTION, false);
         }
+        for (var slot : ArmorSlot.CANONICAL_ORDER) {
+            var proposed=requested.armor().get(slot);
+            if (proposed.equals(old.armor().get(slot)) || !(proposed instanceof ArmorSelection.Custom custom)) continue;
+            if (!armor.snapshot().available()) return outcome(id, FullFashionSelectionStatus.SERVICE_UNAVAILABLE, false);
+            if (!armor.snapshot().supports(custom.id(),slot)) return outcome(id, FullFashionSelectionStatus.INVALID_ARMOR_SELECTION, false);
+        }
         if (exceedsStorage(old, requested)) return outcome(id, FullFashionSelectionStatus.STORAGE_LIMIT, false);
         if (!requested.cape().equals(old.cape()) && requested.cape().isPresent() && !selectionPolicy.test(id, requested.cape().orElseThrow())) return outcome(id, FullFashionSelectionStatus.NOT_ALLOWED, false);
         commit(id, requested); return outcome(id, FullFashionSelectionStatus.SUCCESS, true);
@@ -130,12 +138,17 @@ public final class PlayerFashionService {
     private PlayerFashionEffectiveState effective(PlayerFashionStoredState stored) {
         var result = stored.outfit();
         for (OutfitPart part : OutfitPart.CANONICAL_ORDER) if (result.get(part) instanceof OutfitPartSelection.Outfit outfit && !active(outfit.id(), part)) result = result.with(part, OutfitPartSelection.ORIGINAL);
-        return new PlayerFashionEffectiveState(stored.cape().filter(registry::isValid), result);
+        return new PlayerFashionEffectiveState(stored.cape().filter(registry::isValid), result, armor.snapshot().effective(stored.armor()));
     }
     private FullPlayerFashionState state(PlayerFashionStoredState stored, long revision) { return new FullPlayerFashionState(stored, effective(stored), revision); }
     public ReconciliationResult reconcile(CapeRegistryKnowledge updated) { return reconcile(updated, outfits, entry -> { }); }
     public ReconciliationResult reconcile(CapeRegistryKnowledge updated, OutfitRegistryLoadResult outfitKnowledge, Consumer<FullPlayerFashionEntry> changed) {
         return reconcile(updated, Optional.of(outfitKnowledge), changed);
+    }
+    public ReconciliationResult reconcile(CapeRegistryKnowledge updated, OutfitRegistryLoadResult outfits, ArmorRegistryLoadResult armor, Consumer<FullPlayerFashionEntry> changed) {
+        if (!online.isEmpty()) throw new IllegalStateException("联合启动 reconciliation 必须先于玩家加入；在线更新使用原子重载。");
+        this.armor=Objects.requireNonNull(armor);
+        return reconcile(updated,Optional.of(outfits),changed);
     }
     private ReconciliationResult reconcile(CapeRegistryKnowledge updated, Optional<OutfitRegistryLoadResult> outfitKnowledge, Consumer<FullPlayerFashionEntry> changed) {
         registry = Objects.requireNonNull(updated); outfits = Objects.requireNonNull(outfitKnowledge);
@@ -149,7 +162,7 @@ public final class PlayerFashionService {
                 for (OutfitPart part : OutfitPart.CANONICAL_ORDER) {
                     if (selection.get(part) instanceof OutfitPartSelection.Outfit outfit && outfits.map(o -> o.knowledge().isDefinitelyAbsent(outfit.id())).orElse(false)) selection = selection.with(part, OutfitPartSelection.ORIGINAL);
                 }
-                next = new PlayerFashionStoredState(next.cape(), selection);
+                next = next.withOutfit(selection);
             }
             var resolved = effective(next); var member = online.get(id);
             boolean storedChanged = !next.equals(old);
@@ -158,17 +171,22 @@ public final class PlayerFashionService {
             if (authorityChanged && !exhausted(id) && online.size() <= FullPlayerFashionSnapshot.MAX_PLAYERS) {
                 member.state = new FullPlayerFashionState(next, resolved, member.state.revision()+1); changed.accept(new FullPlayerFashionEntry(id, member.state));
             }
-            if (!next.cape().equals(resolved.cape()) || !next.outfit().equals(resolved.outfit())) dormant++;
+            if (!next.cape().equals(resolved.cape()) || !next.outfit().equals(resolved.outfit()) || !next.armor().equals(resolved.armor())) dormant++;
         }
         return new ReconciliationResult(cleared, dormant);
     }
+    public ArmorRegistryLoadResult armor() { return armor; }
     public long registryGeneration() { return registryGeneration; }
     /** 先计算全部变更再提交；不扫描、删除或重新派生 Cape 领域。 */
     public OutfitReloadCommit reloadOutfits(OutfitRegistryLoadResult candidate) {
-        Objects.requireNonNull(candidate);
+        return reloadResources(candidate,armor);
+    }
+    public OutfitReloadCommit reloadResources(OutfitRegistryLoadResult candidate,ArmorRegistryLoadResult armorCandidate) {
+        Objects.requireNonNull(candidate); Objects.requireNonNull(armorCandidate);
         if (!candidate.knowledge().trustworthy() || !writable()) return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE, List.of(), 0);
         if (outfits.isPresent() && OutfitRegistrySnapshot.from(outfits.orElseThrow()).equals(OutfitRegistrySnapshot.from(candidate))
-                && outfits.orElseThrow().knowledge().knownExistingIds().equals(candidate.knowledge().knownExistingIds()))
+                && outfits.orElseThrow().knowledge().knownExistingIds().equals(candidate.knowledge().knownExistingIds())
+                && armor.snapshot().equals(armorCandidate.snapshot()))
             return new OutfitReloadCommit(ReloadStatus.NO_CHANGE, List.of(), 0);
         if (registryGeneration==Long.MAX_VALUE || online.size()>FullPlayerFashionSnapshot.MAX_PLAYERS)
             return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE, List.of(), 0);
@@ -180,7 +198,7 @@ public final class PlayerFashionService {
             for (OutfitPart part:OutfitPart.CANONICAL_ORDER)
                 if (selected.get(part) instanceof OutfitPartSelection.Outfit value && candidate.knowledge().isDefinitelyAbsent(value.id()))
                     selected=selected.with(part,OutfitPartSelection.ORIGINAL);
-            var next=new PlayerFashionStoredState(old.cape(),selected);
+            var next=old.withOutfit(selected);
             if (!next.equals(old)) storedChanges.put(id,next);
             var member=online.get(id);
             if (member==null) continue;
@@ -188,21 +206,21 @@ public final class PlayerFashionService {
             for (OutfitPart part:OutfitPart.CANONICAL_ORDER)
                 if (selected.get(part) instanceof OutfitPartSelection.Outfit value && !active(Optional.of(candidate),value.id(),part))
                     effectiveOutfit=effectiveOutfit.with(part,OutfitPartSelection.ORIGINAL);
-            var resolved=new PlayerFashionEffectiveState(member.state.effective().cape(),effectiveOutfit);
+            var resolved=new PlayerFashionEffectiveState(member.state.effective().cape(),effectiveOutfit,armorCandidate.snapshot().effective(next.armor()));
             if (!member.state.stored().equals(next) || !member.state.effective().equals(resolved)) {
                 if (exhausted(id)) return new OutfitReloadCommit(ReloadStatus.UNAVAILABLE,List.of(),0);
                 authorities.add(new FullPlayerFashionEntry(id,new FullPlayerFashionState(next,resolved,member.state.revision()+1)));
             }
         }
         // 此处之后没有扫描或用户回调；由同一服务器线程完成可见状态替换。
-        outfits=Optional.of(candidate); registryGeneration++;
+        outfits=Optional.of(candidate); armor=armorCandidate; registryGeneration++;
         storedChanges.forEach(data::setState);
         authorities.forEach(entry -> online.get(entry.playerId()).state=entry.state());
         return new OutfitReloadCommit(ReloadStatus.COMMITTED,List.copyOf(authorities),storedChanges.size());
     }
     public enum ReloadStatus { COMMITTED, NO_CHANGE, UNAVAILABLE }
     public record OutfitReloadCommit(ReloadStatus status, List<FullPlayerFashionEntry> authorities, int storedChanges) { }
-    public void stop() { stopped = true; online.clear(); outfits = Optional.empty(); }
+    public void stop() { stopped = true; online.clear(); outfits = Optional.empty(); armor=ArmorRegistryLoadResult.unavailable("服务已停止。"); }
     private static final class Membership {
         private final Object connection; private FullPlayerFashionState state;
         private Membership(Object connection, FullPlayerFashionState state) { this.connection = connection; this.state = state; }

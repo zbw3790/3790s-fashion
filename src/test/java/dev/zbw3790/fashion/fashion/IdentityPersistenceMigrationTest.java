@@ -19,7 +19,7 @@ class IdentityPersistenceMigrationTest {
     byte[] writeLegacy(int version) throws Exception {
         Files.createDirectories(legacy().getParent());
         if(version==1){try(var input=getClass().getResourceAsStream("/dev/zbw3790/fashion/fashion/frozen-v021-player-fashion.dat")){assertNotNull(input);Files.copy(input,legacy());}}
-        else NbtIo.writeCompressed(FullFashionPersistenceTest.validRoot(),legacy());
+        else {var root=FullFashionPersistenceTest.validRoot();root.getCompound("data").orElseThrow().putInt("schema_version",2);NbtIo.writeCompressed(root,legacy());}
         return Files.readAllBytes(legacy());
     }
     @ParameterizedTest @ValueSource(ints={1,2})
@@ -43,7 +43,7 @@ class IdentityPersistenceMigrationTest {
         }
         assertArrayEquals(new byte[]{0},Files.readAllBytes(legacy()));
         var saved=NbtIo.readCompressed(current(),NbtAccounter.create(PlayerFashionPersistence.MAX_NBT_BYTES));
-        assertEquals(2,saved.getCompound("data").orElseThrow().getIntOr("schema_version",-1));
+        assertEquals(4,saved.getCompound("data").orElseThrow().getIntOr("schema_version",-1));
         try(var storage=storage(directory)){
             var loaded=PlayerFashionPersistence.load(storage,directory,NOPLogger.NOP_LOGGER);
             assertEquals(PlayerFashionStoredState.DEFAULT,loaded.data().storedState(FIRST));
@@ -57,7 +57,7 @@ class IdentityPersistenceMigrationTest {
         else if(damage.equals("garbage"))Files.write(legacy(),new byte[]{0});
         else {
             var root=FullFashionPersistenceTest.validRoot();var data=root.getCompound("data").orElseThrow();
-            if(damage.equals("schema"))data.putInt("schema_version",3);
+            if(damage.equals("schema"))data.putInt("schema_version",5);
             else {var entries=data.getList("entries").orElseThrow();entries.add(entries.get(0).copy());}
             NbtIo.writeCompressed(root,legacy());
         }

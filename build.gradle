@@ -83,3 +83,29 @@ tasks.register('verifyVisualContractApi') {
 }
 tasks.named('compileClientJava') { dependsOn 'verifyVisualContractApi' }
 tasks.named('compileTestJava') { dependsOn 'verifyVisualContractApi' }
+
+// 独立测试 Mod：生产 JAR 与 sourcesJar 均不消费此源集。
+sourceSets {
+    armorHarness {
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+tasks.named('processArmorHarnessResources') {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.register('armorHarnessJar', Jar) {
+    dependsOn tasks.named('armorHarnessClasses')
+    archiveBaseName = 'fashion-armor-harness'
+    archiveVersion = project.version
+    from sourceSets.armorHarness.output
+}
+
+// 历史 Spike 源码留存供回归；生产不再携带调试命令或替代外观入口。
+sourceSets.client.java.exclude '**/client/dev/spike/**'
+sourceSets.test.java.srcDir 'src/client/java/dev/zbw3790/fashion/client/dev/spike'
+sourceSets.test.compileClasspath += sourceSets.armorHarness.output.classesDirs
+sourceSets.test.runtimeClasspath += sourceSets.armorHarness.output.classesDirs
+tasks.named('compileTestJava') { dependsOn 'compileArmorHarnessJava' }

@@ -1,14 +1,18 @@
 {
-	"required": true,
-	"minVersion": "0.8",
-	"package": "dev.zbw3790.fashion.client.mixin",
-	"compatibilityLevel": "JAVA_25",
-	"client": [
-		"WingsLayerMixin",
-		"ItemInHandRendererMixin",
-		"LivingEntityRendererMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	}
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.zbw3790.fashion.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "HumanoidArmorLayerMixin",
+    "EquipmentLayerRendererMixin",
+    "ArmorTextureLifetimeMixin",
+    "WingsLayerMixin",
+    "ItemInHandRendererMixin",
+    "LivingEntityRendererMixin",
+    "InventoryScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

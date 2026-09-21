@@ -77,16 +77,16 @@ class ReleaseProtocolBoundaryTest {
 	}
 
     @Test
-    void v2AndCombinedExactSetsMatchActualRegistration() throws Exception {
-        var newS2c=Set.of(OutfitRegistryRefreshPayload.TYPE,OutfitRegistrySnapshotPayload.TYPE,OutfitAssetDataPayload.TYPE,FullPlayerFashionSnapshotPayload.TYPE,
+    void v4AndCombinedExactSetsMatchActualRegistration() throws Exception {
+        var newS2c=Set.of(ArmorRegistryPayload.TYPE,ArmorAssetDataPayload.TYPE,OutfitRegistryRefreshPayload.TYPE,OutfitRegistrySnapshotPayload.TYPE,OutfitAssetDataPayload.TYPE,FullPlayerFashionSnapshotPayload.TYPE,
                 FullPlayerFashionUpdatePayload.TYPE,FullPlayerFashionRemovePayload.TYPE,FullFashionSelectionResultPayload.TYPE);
-        var newC2s=Set.of(OutfitAssetRequestPayload.TYPE,SetFullFashionSelectionPayload.TYPE);
-        assertEquals(Set.of("outfit_registry_refresh","outfit_registry_snapshot","outfit_asset_data","full_player_fashion_snapshot","full_player_fashion_update","full_player_fashion_remove","full_fashion_selection_result"),newS2c.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
-        assertEquals(Set.of("outfit_asset_request","set_full_fashion_selection"),newC2s.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
+        var newC2s=Set.of(ArmorAssetRequestPayload.TYPE,OutfitAssetRequestPayload.TYPE,SetFullFashionSelectionPayload.TYPE);
+        assertEquals(Set.of("armor_registry_v1","armor_asset_data","outfit_registry_refresh","outfit_registry_snapshot","outfit_asset_data","full_player_fashion_snapshot_v4","full_player_fashion_update_v4","full_player_fashion_remove_v4","full_fashion_selection_result_v4"),newS2c.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(Set.of("armor_asset_request","outfit_asset_request","set_full_fashion_selection_v4"),newC2s.stream().map(t->t.id().getPath()).collect(java.util.stream.Collectors.toSet()));
         java.util.Set<String> expectedS=new java.util.HashSet<>(),expectedC=new java.util.HashSet<>();
         java.util.stream.Stream.concat(S2C.stream(),newS2c.stream()).forEach(t->expectedS.add(t.id().getPath()));
         java.util.stream.Stream.concat(C2S.stream(),newC2s.stream()).forEach(t->expectedC.add(t.id().getPath()));
-        assertEquals(15,expectedS.size());assertEquals(4,expectedC.size());
+        assertEquals(17,expectedS.size());assertEquals(5,expectedC.size());
         Path root=Path.of(System.getProperty("user.dir")).toAbsolutePath();while(!java.nio.file.Files.exists(root.resolve("settings.gradle")))root=root.getParent();
         String source=java.nio.file.Files.readString(root.resolve("src/main/java/dev/zbw3790/fashion/network/Fashion3790Networking.java"))+java.nio.file.Files.readString(root.resolve("src/main/java/dev/zbw3790/fashion/network/PlayerFashionNetworking.java"));
         for(boolean clientbound:new boolean[]{true,false}){
@@ -99,7 +99,7 @@ class ReleaseProtocolBoundaryTest {
     @Test void serverRouteNeedsAllThreeStateReceiversAndCannotBeInferredFromCodec(){
         for(int mask=0;mask<16;mask++){
             var route=dev.zbw3790.fashion.fashion.FashionAuthorityRoute.server((mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0);
-            assertEquals((mask&7)==7?dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V2:(mask&8)!=0?dev.zbw3790.fashion.fashion.FashionAuthorityRoute.LEGACY:dev.zbw3790.fashion.fashion.FashionAuthorityRoute.UNDECIDED,route);
+            assertEquals((mask&7)==7?dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V4:(mask&8)!=0?dev.zbw3790.fashion.fashion.FashionAuthorityRoute.LEGACY:dev.zbw3790.fashion.fashion.FashionAuthorityRoute.UNDECIDED,route);
         }
     }
     private static List<String> componentNames(Class<?> recordType) {

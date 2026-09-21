@@ -65,6 +65,8 @@ public final class WardrobeScreen extends Screen {
     private Button reloadButton;
     private final OutfitWardrobeContent outfitContent;
     private final WardrobeOutfitSource outfitSource;
+    private final WardrobeArmorSource armorSource;
+    private final ArmorWardrobeContent armorContent;
     private final Map<AbstractWidget,String> focusKeys=new LinkedHashMap<>();
     private String rememberedFocus;
     private boolean rebuilding;
@@ -81,7 +83,8 @@ public final class WardrobeScreen extends Screen {
 			UUID self, Object connection) {
 		this(Minecraft.getInstance(), Minecraft.getInstance().font, capeRegistry, textureManager,
 				playerFashions, requests, self, connection, runtimeActions(Minecraft.getInstance()),
-                dev.zbw3790.fashion.client.Fashion3790Client.wardrobeOutfits());
+                dev.zbw3790.fashion.client.Fashion3790Client.wardrobeOutfits(),
+                WardrobeArmorSource.current(dev.zbw3790.fashion.client.Fashion3790Client.armorResources(),Minecraft.getInstance().getConnection()));
 	}
 
 	/** 将屏幕外部的输入绑定、发送和关闭动作集中在一个边界，便于普通 JVM 验证。 */
@@ -93,6 +96,12 @@ public final class WardrobeScreen extends Screen {
     WardrobeScreen(Minecraft minecraft, Font font, ClientCapeRegistry capeRegistry,
             ClientCapeTextureManager textureManager, ClientPlayerFashionRegistry playerFashions,
             ClientCapeSelectionRequestTracker requests, UUID self, Object connection, Actions actions, WardrobeOutfitSource outfitSource) {
+        this(minecraft,font,capeRegistry,textureManager,playerFashions,requests,self,connection,actions,outfitSource,WardrobeArmorSource.empty());
+    }
+    WardrobeScreen(Minecraft minecraft, Font font, ClientCapeRegistry capeRegistry,
+            ClientCapeTextureManager textureManager, ClientPlayerFashionRegistry playerFashions,
+            ClientCapeSelectionRequestTracker requests, UUID self, Object connection, Actions actions,
+            WardrobeOutfitSource outfitSource, WardrobeArmorSource armorSource) {
         super(minecraft, Objects.requireNonNull(font), TITLE);
 		this.playerFashions = Objects.requireNonNull(playerFashions);
 		this.requests = Objects.requireNonNull(requests);
@@ -102,6 +111,7 @@ public final class WardrobeScreen extends Screen {
 		capeContent = new CapeWardrobeContent(capeRegistry, textureManager, selection);
         this.outfitSource=Objects.requireNonNull(outfitSource);
         outfitContent=new OutfitWardrobeContent(selection,outfitSource);
+        this.armorSource=Objects.requireNonNull(armorSource);armorContent=new ArmorWardrobeContent(selection,armorSource);
 		textureResolver = new ClientCapeTextureResolver(textureManager);
 		previewMetadata = capeContent.metadataEntries();
 		previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
@@ -125,18 +135,25 @@ public final class WardrobeScreen extends Screen {
         layout=WardrobeLayout.calculate(Math.max(1,width),Math.max(1,height),font.lineHeight);
         previewRotation.endDrag(WardrobePreviewRotation.PRIMARY_MOUSE_BUTTON);
         applyButton=null;reloadButton=null;focusKeys.clear();contentWidgetIndex=0;
-        observeAuthority();capeContent.refresh(playerFashions.state()==ClientPlayerFashionRegistry.State.UNAVAILABLE);outfitContent.refresh();
+        observeAuthority();capeContent.refresh(playerFashions.state()==ClientPlayerFashionRegistry.State.UNAVAILABLE);outfitContent.refresh();armorContent.refresh();
         recoveryShown=selection.v2() && selection.hasError();renderedV2=selection.v2();
         if (layout.fitsScreen()) {
             for (SelectedTab tab:SelectedTab.values()) addControl(new TabWidget(layout.tabBounds(tab.ordinal()),tab),"tab:"+tab);
             addControl(new WardrobePreviewModeButton(layout.previewModeButtonBounds(),() -> previewMode,
                     () -> previewMode=previewMode.next()),"preview");
             if (selectedTab==SelectedTab.CAPE) capeContent.buildWidgets(layout,this::addContentControl,this::rebuildPreservingFocus);
-            else outfitContent.buildWidgets(layout,font,this::addContentControl,this::rebuildPreservingFocus);
+            else if (selectedTab==SelectedTab.OUTFIT) outfitContent.buildWidgets(layout,font,this::addContentControl,this::rebuildPreservingFocus);
+            else armorContent.buildWidgets(layout,font,this::addContentControl,this::rebuildPreservingFocus);
+            var utility=layout.reloadButtonBounds();
+            int cancelWidth=recoveryShown?(utility.width()-2)/2:utility.width();
+            addControl(new WardrobeArmorButton(new WardrobeLayout.Bounds(utility.x(),utility.y(),cancelWidth,utility.height()),
+                    "cancel",font,() -> WardrobeArmorText.text("cancel"),() -> List.of(WardrobeArmorText.string("cancel_hint")),
+                    () -> true,() -> false,() -> false,this::onClose),"cancel");
             if (recoveryShown) {
-                var b=layout.reloadButtonBounds();
-                reloadButton=addControl(Button.builder(Component.literal("重新加载"),button -> reloadAuthority())
-                        .bounds(b.x(),b.y(),b.width(),b.height()).build(),"reload");
+                var b=new WardrobeLayout.Bounds(utility.x()+cancelWidth+2,utility.y(),utility.width()-cancelWidth-2,utility.height());
+                reloadButton=addControl(new WardrobeArmorButton(b,"reload",font,() -> Component.literal("重新加载"),
+                        () -> List.of(WardrobeArmorText.string("reload_hint")),selection::canEdit,selection::waiting,
+                        () -> false,this::reloadAuthority),"reload");
             }
             var b=layout.applyButtonBounds();
             applyButton=addControl(Button.builder(APPLY,button -> applySelection()).bounds(b.x(),b.y(),b.width(),b.height()).build(),"apply");
@@ -149,21 +166,21 @@ public final class WardrobeScreen extends Screen {
         focusKeys.put(widget,key);return addRenderableWidget(widget);
     }
     private void addContentControl(AbstractWidget widget) {
-        String key=widget instanceof OutfitGridEntryWidget entry?"outfit:"+entry.id().value():
+        String key=widget instanceof ArmorGridEntryWidget armorGrid?armorGrid.key():widget instanceof WardrobeArmorButton armor?armor.key():widget instanceof OutfitGridEntryWidget entry?"outfit:"+entry.id().value():
                 selectedTab+":"+outfitContent.panel()+":"+contentWidgetIndex;
         contentWidgetIndex++;addControl(widget,key);
     }
     private void rememberFocus() {
         if (getFocused() instanceof AbstractWidget widget && focusKeys.containsKey(widget)) {
             rememberedFocus=focusKeys.get(widget);
-            if (rememberedFocus.startsWith(selectedTab+":") || rememberedFocus.startsWith("outfit:")) tabFocus.put(selectedTab,rememberedFocus);
+            if (rememberedFocus.startsWith(selectedTab+":") || rememberedFocus.startsWith("outfit:") || rememberedFocus.startsWith("armor:")) tabFocus.put(selectedTab,rememberedFocus);
         }
     }
     private void restoreFocus() {
         var wanted=focusKeys.entrySet().stream().filter(entry -> entry.getValue().equals(rememberedFocus)
                 && entry.getKey().visible && entry.getKey().active).findFirst();
         if (wanted.isPresent()) { setFocused(wanted.orElseThrow().getKey());return; }
-        String fallback=rememberedFocus==null?"tab:"+selectedTab:selectedTab+":"+outfitContent.panel()+":0";
+        String fallback=selectedTab==SelectedTab.ARMOR?"tab:"+selectedTab:rememberedFocus==null?"tab:"+selectedTab:selectedTab+":"+outfitContent.panel()+":0";
         focusKeys.entrySet().stream().filter(entry -> entry.getValue().equals(fallback) && entry.getKey().visible && entry.getKey().active)
                 .findFirst().ifPresent(entry -> setFocused(entry.getKey()));
     }
@@ -179,6 +196,7 @@ public final class WardrobeScreen extends Screen {
     }
     void reloadAuthority() { observeAuthority();if (selection.reloadAuthority()) rebuildPreservingFocus(); }
     OutfitWardrobeContent outfitContent() { return outfitContent; }
+    ArmorWardrobeContent armorContent() { return armorContent; }
 
 	@Override
 	protected void setInitialFocus() {
@@ -198,19 +216,19 @@ public final class WardrobeScreen extends Screen {
             else selection.observe(Optional.empty(),ClientPlayerFashionRegistry.State.UNINITIALIZED);
             selection.connectionOutstanding(true);return;
         }
-        if (playerFashions.route()==FashionAuthorityRoute.V2) selection.observeFull(playerFashions.fullSelfAuthority(self),playerFashions.state());
+        if (playerFashions.route()==FashionAuthorityRoute.V4) selection.observeFull(playerFashions.fullSelfAuthority(self),playerFashions.state());
         else selection.observe(playerFashions.selfAuthority(self),playerFashions.state());
         selection.connectionOutstanding(hasOutstanding());
 	}
 
 	private boolean canSendSelection() {
-		return playerFashions.route()==FashionAuthorityRoute.V2
+		return playerFashions.route()==FashionAuthorityRoute.V4
                 ? playerFashions.fullRequests().matches(connection) && actions.fullChannelSupported().getAsBoolean()
                 : requests.matchesConnection(connection) && actions.channelSupported().getAsBoolean();
 	}
 
 	private boolean hasOutstanding() {
-        return playerFashions.route()==FashionAuthorityRoute.V2?playerFashions.fullRequests().hasOutstanding():requests.hasOutstanding();
+        return playerFashions.route()==FashionAuthorityRoute.V4?playerFashions.fullRequests().hasOutstanding():requests.hasOutstanding();
     }
     private void refreshSelection() {
 		observeAuthority();
@@ -221,7 +239,8 @@ public final class WardrobeScreen extends Screen {
 			previewMetadata = capeContent.metadataEntries();
 			previewAppearanceResolver = new WardrobePreviewAppearanceResolver(previewMetadata, textureResolver);
 		}
-        changed|=outfitContent.refresh();
+        changed|=outfitContent.refresh();changed|=armorContent.refresh();
+        focusKeys.keySet().stream().filter(WardrobeArmorButton.class::isInstance).map(WardrobeArmorButton.class::cast).forEach(WardrobeArmorButton::refreshState);
         boolean recovery=selection.v2() && selection.hasError();
         if ((changed || recovery!=recoveryShown || renderedV2!=selection.v2()) && layout!=null && !rebuilding) { rebuildPreservingFocus();return; }
         if (reloadButton!=null) reloadButton.active=selection.canEdit();
@@ -232,15 +251,15 @@ public final class WardrobeScreen extends Screen {
 
     boolean canApply() {
         return selection.v2()?selection.canFinishFull(canSendSelection(),actions.resultReceiverReady().getAsBoolean(),
-                hasOutstanding(),capeContent::hasMetadata,outfitSource::admitted):
+                hasOutstanding(),capeContent::hasMetadata,outfitSource::admitted,armorSource::admitted):
                 selection.canFinish(canSendSelection(),hasOutstanding(),capeContent::hasMetadata);
     }
 
     void applySelection() {
 		refreshSelection();
-		if (playerFashions.route()==FashionAuthorityRoute.V2) {
+		if (playerFashions.route()==FashionAuthorityRoute.V4) {
             selection.finishFull(playerFashions.fullRequests(),canSendSelection(),actions.resultReceiverReady().getAsBoolean(),
-                    capeContent::hasMetadata,outfitSource::admitted).ifPresent(actions.fullSend());
+                    capeContent::hasMetadata,outfitSource::admitted,armorSource::admitted).ifPresent(actions.fullSend());
         } else {
             var decision = selection.finish(requests, canSendSelection(), capeContent::hasMetadata);
             decision.request().ifPresent(actions.send());
@@ -310,17 +329,18 @@ public final class WardrobeScreen extends Screen {
         if (selectedTab==SelectedTab.CAPE) return WardrobeStatusText.create(selection,playerFashions.state(),canSendSelection(),
                 hasOutstanding(),capeContent::hasMetadata,capeContent.state(),capeContent.status());
         var priority=WardrobeStatusText.Priority.NORMAL;
-        String detail=outfitContent.resourceStatus();
+        String detail=selectedTab==SelectedTab.ARMOR?armorContent.resourceStatus():outfitContent.resourceStatus();
         if (selection.hasError()) { priority=WardrobeStatusText.Priority.ERROR;detail=selection.status(canSendSelection(),hasOutstanding(),capeContent::hasMetadata); }
         else if (selection.waiting()) { priority=WardrobeStatusText.Priority.PENDING;detail=selection.pendingStatus(); }
         else if (!selection.authorityKnown()) { priority=WardrobeStatusText.Priority.LOADING;detail="时装状态当前不可用"; }
         else if (!canSendSelection() || (selection.v2() && !actions.resultReceiverReady().getAsBoolean())) { priority=WardrobeStatusText.Priority.ERROR;detail="服务器不支持保存时装选择"; }
-        return new WardrobeStatusText(priority,outfitContent.scope().label+"："+outfitContent.summary(),detail,selection.supplementalStatus());
+        return new WardrobeStatusText(priority,selectedTab==SelectedTab.ARMOR?armorContent.title()+"："+armorContent.summary():
+                outfitContent.scope().label+"："+outfitContent.summary(),detail,selection.supplementalStatus());
 	}
 
 	@Override
 	public Component getNarrationMessage() {
-		return Component.literal("衣柜，"+selectedTab.label+"。当前预览："
+		return Component.literal("衣柜，"+selectedTab.label()+"。当前预览："
 				+ (previewMode == WardrobePreviewMode.CAPE ? "披风。" : "鞘翅。")
 				+ statusText().narration());
 	}
@@ -336,7 +356,7 @@ public final class WardrobeScreen extends Screen {
 		WardrobeGuiPainter.previewFrame(graphics::fill, layout);
         if (selectedTab==SelectedTab.CAPE) {
             for (int index=0;index<12;index++) WardrobeGuiPainter.slot(graphics::fill,layout.entryBounds(index));
-        } else if (selection.v2() && outfitContent.panel()==OutfitWardrobeContent.Panel.GRID) {
+        } else if (selection.v2() && (selectedTab==SelectedTab.OUTFIT && outfitContent.panel()==OutfitWardrobeContent.Panel.GRID || selectedTab==SelectedTab.ARMOR && armorContent.browser() && !armorContent.showEmpty())) {
             for (int index=0;index<8;index++) WardrobeGuiPainter.slot(graphics::fill,layout.outfitEntryBounds(index));
         }
 		extractPlayerPreview(graphics, mouseY);
@@ -352,12 +372,18 @@ public final class WardrobeScreen extends Screen {
 		}
 		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 		graphics.text(font, title, layout.titleX(), layout.titleY(), WardrobeGuiPainter.TEXT_COLOR, false);
-        if (selectedTab==SelectedTab.CAPE?capeContent.paginationVisible():outfitContent.paginationVisible()) {
-            String page=selectedTab==SelectedTab.CAPE?capeContent.pageNumber()+" / "+capeContent.pageCount():
-                    outfitContent.pageNumber()+" / "+outfitContent.pageCount();
-			graphics.text(font, page, layout.paginationBounds().centerX() - font.width(page) / 2,
-					layout.pageLabelY(), WardrobeGuiPainter.TEXT_COLOR, false);
-		}
+        boolean pagination=switch(selectedTab) {
+            case CAPE -> capeContent.paginationVisible();case OUTFIT -> outfitContent.paginationVisible();case ARMOR -> armorContent.paginationVisible();
+        };
+        if (pagination) {
+            String page=switch(selectedTab) {
+                case CAPE -> capeContent.pageNumber()+" / "+capeContent.pageCount();
+                case OUTFIT -> outfitContent.pageNumber()+" / "+outfitContent.pageCount();
+                case ARMOR -> armorContent.positionLabel();
+            };
+            graphics.text(font,page,layout.paginationBounds().centerX()-font.width(page)/2,layout.pageLabelY(),WardrobeGuiPainter.TEXT_COLOR,false);
+        }
+        if (selectedTab==SelectedTab.ARMOR && armorContent.showEmpty()) drawWrapped(graphics,armorContent.emptyText(),armorContent.emptyBounds(layout));
         if (selectedTab==SelectedTab.OUTFIT && (!selection.v2() || outfitSource.entries().isEmpty())) {
             var area=selection.v2()?layout.outfitGridBounds():layout.gridBounds();
             drawWrapped(graphics,outfitContent.resourceStatus(),area);
@@ -377,10 +403,12 @@ public final class WardrobeScreen extends Screen {
         if (tooltipState.visible(targetKey,keyboardInput,System.nanoTime())) {
             List<String> lines=List.of();
             if ("status".equals(targetKey)) lines=status.fullText();
+            else if (target instanceof ArmorGridEntryWidget armorGrid) lines=armorGrid.tooltip();
+            else if (target instanceof WardrobeArmorButton armor) lines=armor.tooltip();
             else if (target instanceof OutfitGridEntryWidget entry) lines=outfitContent.tooltip(entry.id());
             else if (target instanceof CapeGridEntryWidget entry) lines=List.of(entry.tooltipText());
             else if (target instanceof WardrobePreviewModeButton) lines=List.of(target.getMessage().getString());
-            else if (target==reloadButton && reloadButton!=null) lines=List.of("重新加载最新权威","丢弃全部未提交的披风与装束草稿");
+            else if (target==reloadButton && reloadButton!=null) lines=List.of("重新加载最新权威","丢弃全部未提交的披风、装束与盔甲草稿");
             else if (target==applyButton && !applyButton.active) lines=List.of(selection.dirty()?
                     (status.secondLine().isEmpty()?"新选择资源尚未就绪":status.secondLine()):"没有新的修改");
             else if (target!=null && selectedTab==SelectedTab.OUTFIT && layout.scopeButtonBounds().contains(target.getX(),target.getY())
@@ -456,6 +484,13 @@ public final class WardrobeScreen extends Screen {
 				event.x(), event.y(), event.button(), layout.previewDragBounds());
 	}
 
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical) {
+        if (selectedTab==SelectedTab.ARMOR && layout!=null && layout.fitsScreen()
+                && layout.gridBounds().contains(x,y) && vertical!=0 && armorContent.scroll(vertical>0?-1:1)) {
+            tooltipState.dismiss();rebuildPreservingFocus();return true;
+        }
+        return super.mouseScrolled(x,y,horizontal,vertical);
+    }
     @Override public void mouseMoved(double x,double y) { keyboardInput=false;super.mouseMoved(x,y); }
 
 	@Override
@@ -480,8 +515,9 @@ public final class WardrobeScreen extends Screen {
 	}
 
 	enum SelectedTab {
-        CAPE("披风"),OUTFIT("装束");
+        CAPE("披风"),OUTFIT("装束"),ARMOR("");
         final String label;SelectedTab(String label) { this.label=label; }
+        String label() { return this==ARMOR?WardrobeArmorText.string("tab"):label; }
     }
 
 	record Actions(BooleanSupplier channelSupported, Predicate<KeyEvent> inventoryKey,
@@ -505,14 +541,14 @@ public final class WardrobeScreen extends Screen {
     private final class TabWidget extends AbstractButton {
         private final SelectedTab tab;
         TabWidget(WardrobeLayout.Bounds b,SelectedTab tab) {
-            super(b.x(),b.y(),b.width(),b.height(),Component.literal(tab.label));this.tab=tab;
+            super(b.x(),b.y(),b.width(),b.height(),Component.literal(tab.label()));this.tab=tab;
         }
         @Override public void onPress(InputWithModifiers input) { if (visible && active) selectTab(tab); }
         @Override protected void extractContents(GuiGraphicsExtractor graphics,int x,int y,float tick) {
             if (isHoveredOrFocused()) graphics.fill(getX()+4,getY()+3,getX()+getWidth()-4,getY()+4,0xffffffff);
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) {
-            output.add(NarratedElementType.TITLE,tab.label+(selectedTab==tab?"，已选择":"，切换分类"));
+            output.add(NarratedElementType.TITLE,tab.label()+(selectedTab==tab?"，已选择":"，切换分类"));
         }
     }
 }

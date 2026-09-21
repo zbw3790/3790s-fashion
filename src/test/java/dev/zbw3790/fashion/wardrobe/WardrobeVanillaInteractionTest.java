@@ -83,10 +83,25 @@ class WardrobeVanillaInteractionTest {
         var availability=dev.zbw3790.fashion.Fashion3790.wardrobeServerAvailability();boolean before=availability.isAvailable();
         try {
             availability.markAvailable();
-            assertEquals(InteractionResult.CONSUME.withoutItem(),interact(InteractionHand.MAIN_HAND));
+            assertEquals(InteractionResult.SUCCESS_SERVER.withoutItem(),interact(InteractionHand.MAIN_HAND));
             assertEquals(0,stand.writes);assertTrue(player.hands.isEmpty());
             availability.reset();assertSame(InteractionResult.PASS,interact(InteractionHand.MAIN_HAND));
         } finally {if(before)availability.markAvailable();else availability.reset();}
+    }
+    @ParameterizedTest @EnumSource(InteractionHand.class)
+    void secondaryUseBypassesOnlyFallback(InteractionHand hand) {
+        player.secondary=true;player.hands.put(hand,new ItemStack(Items.STICK));
+        var result=interact(hand);assertSame(InteractionResult.PASS,result);
+        assertFalse(WardrobeInteractionRules.isWardrobeCandidate(player,stand,result));
+        player.hands.put(hand,new ItemStack(Items.IRON_HELMET));
+        assertTrue(interact(hand).consumesAction());assertTrue(stand.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET));
+    }
+    @ParameterizedTest @EnumSource(InteractionHand.class)
+    void clientSecondaryMarkerPassNeverConsumesForWardrobe(InteractionHand hand) {
+        level.client=true;stand.marker=true;player.secondary=true;
+        var availability=dev.zbw3790.fashion.Fashion3790.wardrobeServerAvailability();boolean before=availability.isAvailable();
+        try{availability.markAvailable();assertSame(InteractionResult.PASS,interact(hand));}
+        finally{if(before)availability.markAvailable();else availability.reset();}
     }
     @Test void commonMixinIsActuallyAppliedByKnotTestLoader() {
         assertTrue(Arrays.stream(Player.class.getDeclaredMethods()).anyMatch(method->method.getName().contains("fashion3790$afterInteraction")),"必须验证 Player 返回点注入实际存在。");
@@ -104,13 +119,13 @@ class WardrobeVanillaInteractionTest {
         @Override public void gameEvent(Holder<GameEvent> event,Vec3 position,GameEvent.Context context) { }
     }
     static class ProbePlayer extends Player {
-        ProbeLevel world;EnumMap<InteractionHand,ItemStack> hands;boolean spectator;
+        ProbeLevel world;EnumMap<InteractionHand,ItemStack> hands;boolean spectator;boolean secondary;
         ProbePlayer(){super(null,new GameProfile(new UUID(0,1),"测试玩家"));}
         @Override public Level level(){return world;}
         @Override public ItemStack getItemInHand(InteractionHand hand){return hands.getOrDefault(hand,ItemStack.EMPTY);}
         @Override public void setItemInHand(InteractionHand hand,ItemStack item){hands.put(hand,item);}
         @Override public boolean isSpectator(){return spectator;}
-        @Override public boolean isSecondaryUseActive(){return false;}
+        @Override public boolean isSecondaryUseActive(){return secondary;}
         @Override public boolean hasInfiniteMaterials(){return false;}
         @Override public GameType gameMode(){return GameType.SURVIVAL;}
     }

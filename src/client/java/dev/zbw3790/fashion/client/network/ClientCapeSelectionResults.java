@@ -15,7 +15,7 @@ public final class ClientCapeSelectionResults {
 	public static boolean apply(Object connection, UUID self, CapeSelectionResultPayload result,
 			ClientPlayerFashionRegistry fashions, ClientCapeSelectionRequestTracker tracker,
 			Supplier<WardrobeSelectionSession> currentSession, Predicate<CapeId> metadataPresent) {
-		if (fashions.route()==dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V2 || !tracker.matchesConnection(connection)) {
+		if (fashions.route()==dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V4 || !tracker.matchesConnection(connection)) {
 			return false;
 		}
 		fashions.confirmSelfResult(self, result.authoritativeState());

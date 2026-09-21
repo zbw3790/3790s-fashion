@@ -1,6 +1,7 @@
 package dev.zbw3790.fashion.network;
 
 import java.util.*;
+import dev.zbw3790.fashion.armor.*;
 import java.util.function.Function;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.network.FriendlyByteBuf;
@@ -43,6 +44,7 @@ final class FashionWireCodec {
             if (selection instanceof OutfitPartSelection.Outfit outfit) { b.writeByte(2); b.writeUtf(outfit.id().value(), 64); }
             else b.writeByte(selection == OutfitPartSelection.NONE ? 1 : 0);
         }
+        b.writeBytes(ArmorSelectionEncoding.encode(state.armor()));
     }
     static PlayerFashionStoredState stored(FriendlyByteBuf b) {
         Optional<CapeId> cape = bool(b) ? Optional.of(new CapeId(b.readUtf(64))) : Optional.empty();
@@ -55,13 +57,16 @@ final class FashionWireCodec {
             };
             outfit = outfit.with(part, selection);
         }
-        return new PlayerFashionStoredState(cape, outfit);
+        return new PlayerFashionStoredState(cape, outfit, ArmorSelectionEncoding.read(b::readUnsignedByte));
     }
     static void authority(FriendlyByteBuf b, FullPlayerFashionState state) {
         b.writeLong(state.revision()); stored(b, state.stored());
         int mask = state.effective().cape().isPresent() ? 1 : 0;
         for (int i=0; i<6; i++) if (state.effective().outfit().get(OutfitPart.CANONICAL_ORDER.get(i)) instanceof OutfitPartSelection.Outfit) mask |= 1 << (i+1);
         b.writeByte(mask);
+        int armorMask=0;
+        for (var slot : ArmorSlot.CANONICAL_ORDER) if (state.effective().armor().get(slot) instanceof ArmorSelection.Custom) armorMask |= 1 << slot.ordinal();
+        b.writeByte(armorMask);
     }
     static FullPlayerFashionState authority(FriendlyByteBuf b) {
         long revision = nonnegative(b); var stored = stored(b); int mask = b.readUnsignedByte();
@@ -72,7 +77,15 @@ final class FashionWireCodec {
             if (selection instanceof OutfitPartSelection.Outfit) { if (!active) effective = effective.with(part, OutfitPartSelection.ORIGINAL); }
             else if (active) throw new IllegalArgumentException("内建部位不能设置激活位。");
         }
-        return new FullPlayerFashionState(stored, new PlayerFashionEffectiveState((mask & 1) != 0 ? stored.cape() : Optional.empty(), effective), revision);
+        int armorMask=b.readUnsignedByte();
+        if (armorMask>15) throw new IllegalArgumentException("盔甲激活掩码超限。");
+        var armor=stored.armor();
+        for (var slot : ArmorSlot.CANONICAL_ORDER) {
+            boolean active=(armorMask & (1 << slot.ordinal()))!=0;
+            if (armor.get(slot) instanceof ArmorSelection.Custom) { if (!active) armor=armor.with(slot,ArmorSelection.ORIGINAL); }
+            else if (active) throw new IllegalArgumentException("盔甲内建选择不能设置激活位。");
+        }
+        return new FullPlayerFashionState(stored, new PlayerFashionEffectiveState((mask & 1) != 0 ? stored.cape() : Optional.empty(), effective, armor), revision);
     }
     static void entry(FriendlyByteBuf b, FullPlayerFashionEntry entry) { b.writeUUID(entry.playerId()); authority(b, entry.state()); }
     static FullPlayerFashionEntry entry(FriendlyByteBuf b) { return new FullPlayerFashionEntry(b.readUUID(), authority(b)); }

@@ -11,8 +11,8 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
 public record FullPlayerFashionSnapshotPayload(FullPlayerFashionSnapshot snapshot) implements CustomPacketPayload {
-    public static final Type<FullPlayerFashionSnapshotPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_player_fashion_snapshot"));
-    public static final int MAX_BODY_BYTES = 498691;
+    public static final Type<FullPlayerFashionSnapshotPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_player_fashion_snapshot_v4"));
+    public static final int MAX_BODY_BYTES = 635907;
     public static final StreamCodec<RegistryFriendlyByteBuf, FullPlayerFashionSnapshotPayload> CODEC = StreamCodec.ofMember(FullPlayerFashionSnapshotPayload::encode,
             buffer -> FashionWireCodec.decode(buffer, MAX_BODY_BYTES, FullPlayerFashionSnapshotPayload::read));
     public FullPlayerFashionSnapshotPayload { Objects.requireNonNull(snapshot); }

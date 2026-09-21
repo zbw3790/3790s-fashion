@@ -19,6 +19,13 @@ record WardrobePreviewDraft(PlayerFashionStoredState draft, FullPlayerFashionSta
                 result=result.with(part,baseline.effective().outfit().get(part));
         return result;
     }
+    dev.zbw3790.fashion.armor.ArmorSelections armor() {
+        var result=draft.armor();
+        for (var slot:dev.zbw3790.fashion.armor.ArmorSlot.CANONICAL_ORDER)
+            if (draft.armor().get(slot).equals(baseline.stored().armor().get(slot)))
+                result=result.with(slot,baseline.effective().armor().get(slot));
+        return result;
+    }
     OutfitAppearanceProvider provider(Object expectedConnection,java.util.UUID expectedPlayer,ClientOutfitTextureResolver textures) {
         return context -> {
             if (context.scene()!=OutfitRenderAppearance.Scene.WARDROBE_PREVIEW || context.connection()!=expectedConnection || !context.player().equals(expectedPlayer)) return Optional.empty();

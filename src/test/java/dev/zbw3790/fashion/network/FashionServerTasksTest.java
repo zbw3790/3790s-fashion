@@ -80,7 +80,7 @@ class FashionServerTasksTest {
         f.assertEmpty(); assertEquals(left, f.left.size()); assertEquals(before, f.data.storedSnapshot()); assertFalse(f.data.isDirty());
     }
 
-    @ParameterizedTest @EnumSource(value = FashionAuthorityRoute.class, names = {"V2", "LEGACY"})
+    @ParameterizedTest @EnumSource(value = FashionAuthorityRoute.class, names = {"V4", "LEGACY"})
     void runningDisconnectStillBroadcastsFinalRevisionThenReleasesMembershipAndBudgets(FashionAuthorityRoute route) throws Exception {
         var f = new Fixture(); var id = f.ids[0]; var connection = f.connections[0];
         f.channel.routes.put(connection, route); var before = f.data.storedSnapshot();
@@ -111,7 +111,7 @@ class FashionServerTasksTest {
             });
             assertEquals(0, f.service.authority(id).orElseThrow().revision());
             assertFalse(c.routes.containsKey(old)); assertEquals(0, c.assets.attempts(old));
-            c.routes.put(newer, FashionAuthorityRoute.V2); c.assets.open(newer, Set.of(Fixture.HASH)); c.capes.open(id, newer);
+            c.routes.put(newer, FashionAuthorityRoute.V4); c.assets.open(newer, Set.of(Fixture.HASH)); c.capes.open(id, newer);
         });
         int repeats = order.equals("duplicate-old") ? 2 : 1;
         for (int i=0; i<repeats; i++) f.loop.network(() -> f.dispatch(c -> assertFalse(c.leave(f.service, id, old, f::left))));
@@ -146,7 +146,7 @@ class FashionServerTasksTest {
         var f = new Fixture(); var before = f.data.storedSnapshot();
         f.loop.network(() -> {
             f.dispatch(c -> { f.mutations++; c.join(f.service, new UUID(0,9), new Object(), f::left); });
-            f.dispatch(c -> { f.mutations++; c.routes.put(new Object(), FashionAuthorityRoute.V2); });
+            f.dispatch(c -> { f.mutations++; c.routes.put(new Object(), FashionAuthorityRoute.V4); });
             f.dispatch(c -> { f.mutations++; c.assets.open(new Object(), Set.of(Fixture.HASH)); });
             f.dispatch(c -> { f.mutations++; c.capes.open(new UUID(0,9), new Object()); });
             f.dispatch(c -> { f.mutations++; f.service.setSelection(f.ids[0], Optional.empty()); });
@@ -188,7 +188,7 @@ class FashionServerTasksTest {
                 channel.join(service, ids[i], connections[i], this::left);
                 assertEquals(FullFashionSelectionStatus.SUCCESS, service.apply(ids[i], connections[i], true, 0,
                         new PlayerFashionStoredState(Optional.of(founder), parts)).status());
-                channel.routes.put(connections[i], i==1?FashionAuthorityRoute.LEGACY:FashionAuthorityRoute.V2);
+                channel.routes.put(connections[i], i==1?FashionAuthorityRoute.LEGACY:FashionAuthorityRoute.V4);
                 channel.assets.open(connections[i], Set.of(HASH));
                 channel.assets.claim(connections[i], new OutfitAssetRequestPayload(List.of(HASH)));
                 channel.capes.open(ids[i], connections[i]); channel.capes.claim(ids[i], connections[i], HASH);

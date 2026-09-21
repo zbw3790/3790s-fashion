@@ -12,7 +12,7 @@ public final class ClientFullFashionSelectionResults {
     private ClientFullFashionSelectionResults() { }
     public static boolean apply(Object connection, Object requestConnection, UUID self, FullFashionSelectionResultPayload result,
             ClientPlayerFashionRegistry registry, Supplier<WardrobeSelectionSession> currentScreen) {
-        if (registry.route()!=FashionAuthorityRoute.V2 || registry.connectionIdentity()!=connection || !registry.fullRequests().matches(requestConnection)) return false;
+        if (registry.route()!=FashionAuthorityRoute.V4 || registry.connectionIdentity()!=connection || !registry.fullRequests().matches(requestConnection)) return false;
         result.authority().ifPresent(state -> registry.full().result(connection,new FullPlayerFashionEntry(self,state)));
         boolean matched=registry.fullRequests().complete(requestConnection,result.requestId());
         WardrobeSelectionSession screen=currentScreen.get();

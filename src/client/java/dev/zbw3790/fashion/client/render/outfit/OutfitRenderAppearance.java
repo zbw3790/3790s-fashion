@@ -13,7 +13,7 @@ import dev.zbw3790.fashion.outfit.*;
 /** 已解析的单玩家、单场景外观投影；不承担权威状态、存档或纹理生命周期。 */
 public record OutfitRenderAppearance(UUID player, OutfitSelections selections, OutfitModel model,
         Map<OutfitId, ResolvedAsset> assets, Map<OutfitPart, Boolean> originalVisibility, Scene scene) {
-    public enum Scene { WORLD, WARDROBE_PREVIEW, FIRST_PERSON }
+    public enum Scene { WORLD, WARDROBE_PREVIEW, FIRST_PERSON, VANILLA_INVENTORY }
 
     /** metadata 可信而纹理缺失仍保留声明；未知 ID 则不出现在资产映射中。 */
     public record ResolvedAsset(OutfitMetadata metadata, OutfitModel model, Optional<Identifier> texture) {

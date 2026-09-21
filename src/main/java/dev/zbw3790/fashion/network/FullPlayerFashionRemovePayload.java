@@ -11,7 +11,7 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
 public record FullPlayerFashionRemovePayload(UUID playerId, long revision, Reason reason) implements CustomPacketPayload {
-    public static final Type<FullPlayerFashionRemovePayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_player_fashion_remove"));
+    public static final Type<FullPlayerFashionRemovePayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_player_fashion_remove_v4"));
     public static final int MAX_BODY_BYTES = 25;
     public static final StreamCodec<RegistryFriendlyByteBuf, FullPlayerFashionRemovePayload> CODEC = StreamCodec.ofMember(FullPlayerFashionRemovePayload::encode,
             buffer -> FashionWireCodec.decode(buffer, MAX_BODY_BYTES, FullPlayerFashionRemovePayload::read));

@@ -47,10 +47,10 @@ class OutfitMixinContractTest {
         assertTrue(mixin.contains("submit"+descriptor));assertTrue(mixin.contains("Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModel"+MAIN));
         assertEquals(1,count(mixin,"@WrapOperation("));assertEquals(1,count(mixin,"require = 1, expect = 1, allow = 1"));
     }
-    @Test void jsonContainsOnlyThreeApprovedClientMixins() throws Exception {
+    @Test void jsonContainsOnlyApprovedClientMixins() throws Exception {
         var json=com.google.gson.JsonParser.parseString(Files.readString(root().resolve("src/client/resources/fashion_3790.client.mixins.json"))).getAsJsonObject();
         Set<String> actual=new java.util.HashSet<>();json.getAsJsonArray("client").forEach(v->actual.add(v.getAsString()));
-        assertEquals(Set.of("WingsLayerMixin","ItemInHandRendererMixin","LivingEntityRendererMixin"),actual);
+        assertEquals(Set.of("WingsLayerMixin","ItemInHandRendererMixin","LivingEntityRendererMixin","HumanoidArmorLayerMixin","EquipmentLayerRendererMixin","ArmorTextureLifetimeMixin","InventoryScreenMixin"),actual);
         assertTrue(json.get("required").getAsBoolean());assertEquals(1,json.getAsJsonObject("injectors").get("defaultRequire").getAsInt());
     }
     private static ClassNode readClass(String name) throws Exception {

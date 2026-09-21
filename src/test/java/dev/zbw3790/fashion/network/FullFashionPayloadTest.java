@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.*;
 import dev.zbw3790.fashion.cape.CapeId;
 import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
+import dev.zbw3790.fashion.armor.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings({"rawtypes","unchecked"})
@@ -23,8 +24,9 @@ class FullFashionPayloadTest {
     static FullPlayerFashionState authority(boolean maximum) {
         var parts=OutfitSelections.original(); String name=maximum?"a".repeat(64):"robe";
         for (var part:OutfitPart.CANONICAL_ORDER) parts=parts.with(part,OutfitPartSelection.outfit(new OutfitId(name)));
-        var stored=new PlayerFashionStoredState(Optional.of(new CapeId(name)),parts);
-        return new FullPlayerFashionState(stored,new PlayerFashionEffectiveState(stored.cape(),parts),maximum?Long.MAX_VALUE:7);
+        var armor=ArmorSelections.original();for(var slot:ArmorSlot.CANONICAL_ORDER)armor=armor.with(slot,ArmorSelection.custom(new ArmorStyleId(maximum?"z".repeat(32):"blue")));
+        var stored=new PlayerFashionStoredState(Optional.of(new CapeId(name)),parts,armor);
+        return new FullPlayerFashionState(stored,new PlayerFashionEffectiveState(stored.cape(),parts,armor),maximum?Long.MAX_VALUE:7);
     }
     static List<Sample> samples(boolean maximum) {
         var state=authority(maximum); var entry=new FullPlayerFashionEntry(new UUID(0,1),state);
@@ -32,15 +34,15 @@ class FullFashionPayloadTest {
         var definitions=IntStream.range(0,maximum?256:1).mapToObj(i -> new OutfitRegistrySnapshot.Entry(new OutfitId(hash(i)),OutfitPart.ALL,
                 Set.of(OutfitModel.WIDE,OutfitModel.SLIM),Map.of(OutfitModel.WIDE,hash(i*2),OutfitModel.SLIM,hash(i*2+1)))).toList();
         return List.of(
-            new Sample("Snapshot",FullPlayerFashionSnapshotPayload.CODEC,new FullPlayerFashionSnapshotPayload(new FullPlayerFashionSnapshot(true,entries)),498691),
-            new Sample("Update",FullPlayerFashionUpdatePayload.CODEC,new FullPlayerFashionUpdatePayload(entry),487),
+            new Sample("Snapshot",FullPlayerFashionSnapshotPayload.CODEC,new FullPlayerFashionSnapshotPayload(new FullPlayerFashionSnapshot(true,entries)),635907),
+            new Sample("Update",FullPlayerFashionUpdatePayload.CODEC,new FullPlayerFashionUpdatePayload(entry),621),
             new Sample("Remove",FullPlayerFashionRemovePayload.CODEC,new FullPlayerFashionRemovePayload(entry.playerId(),state.revision(),FullPlayerFashionRemovePayload.Reason.LEFT),25),
-            new Sample("Result",FullFashionSelectionResultPayload.CODEC,new FullFashionSelectionResultPayload(3,FullFashionSelectionStatus.SUCCESS,Optional.of(state)),481),
+            new Sample("Result",FullFashionSelectionResultPayload.CODEC,new FullFashionSelectionResultPayload(3,FullFashionSelectionStatus.SUCCESS,Optional.of(state)),615),
             new Sample("Registry",OutfitRegistrySnapshotPayload.CODEC,new OutfitRegistrySnapshotPayload(new OutfitRegistrySnapshot(true,definitions)),33795),
             new Sample("RegistryRefresh",OutfitRegistryRefreshPayload.CODEC,new OutfitRegistryRefreshPayload(maximum?Long.MAX_VALUE:1,new OutfitRegistrySnapshot(true,definitions)),33803),
             new Sample("Asset",OutfitAssetDataPayload.CODEC,new OutfitAssetDataPayload(hash(1),new byte[maximum?65536:8]),65571),
             new Sample("AssetRequest",OutfitAssetRequestPayload.CODEC,new OutfitAssetRequestPayload(IntStream.range(0,maximum?64:1).mapToObj(FullFashionPayloadTest::hash).toList()),2049),
-            new Sample("Apply",SetFullFashionSelectionPayload.CODEC,new SetFullFashionSelectionPayload(2,state.revision(),state.stored()),478));
+            new Sample("Apply",SetFullFashionSelectionPayload.CODEC,new SetFullFashionSelectionPayload(2,state.revision(),state.stored()),611));
     }
     static Stream<Sample> normal(){return samples(false).stream();}
     static Stream<Sample> maximum(){return samples(true).stream();}
@@ -62,7 +64,7 @@ class FullFashionPayloadTest {
     @Test void duplicateOutfitIdsAreRejected(){reject(OutfitRegistrySnapshotPayload.CODEC,b->{b.writeBoolean(true);b.writeVarInt(2);for(int i=0;i<2;i++){b.writeUtf("same");b.writeByte(1);b.writeByte(1);b.writeByte(0);}});}
     @Test void duplicateRequestHashesRemainAttempts(){var payload=new OutfitAssetRequestPayload(List.of(hash(1),hash(1)));var b=buffer();try{OutfitAssetRequestPayload.CODEC.encode(b,payload);assertEquals(payload,OutfitAssetRequestPayload.CODEC.decode(b));}finally{b.release();}}
     @ParameterizedTest @ValueSource(ints={3,127,255}) void unknownSelectionKindsRejected(int kind){reject(SetFullFashionSelectionPayload.CODEC,b->{b.writeLong(1);b.writeLong(0);b.writeBoolean(false);b.writeByte(kind);});}
-    @ParameterizedTest @ValueSource(ints={9,127,255}) void unknownResultStatusesRejected(int value){reject(FullFashionSelectionResultPayload.CODEC,b->{b.writeLong(1);b.writeByte(value);b.writeBoolean(false);});}
+    @ParameterizedTest @ValueSource(ints={10,127,255}) void unknownResultStatusesRejected(int value){reject(FullFashionSelectionResultPayload.CODEC,b->{b.writeLong(1);b.writeByte(value);b.writeBoolean(false);});}
     @ParameterizedTest @ValueSource(ints={2,127,255}) void unknownRemoveReasonsRejected(int value){reject(FullPlayerFashionRemovePayload.CODEC,b->{b.writeUUID(new UUID(0,1));b.writeLong(0);b.writeByte(value);});}
     @ParameterizedTest @ValueSource(ints={-1,0}) void positiveRequestIdsRequired(long value){reject(SetFullFashionSelectionPayload.CODEC,b->{b.writeLong(value);b.writeLong(0);FashionWireCodec.stored(b,PlayerFashionStoredState.DEFAULT);});reject(FullFashionSelectionResultPayload.CODEC,b->{b.writeLong(value);b.writeByte(4);b.writeBoolean(false);});}
     @Test void negativeRegistryGenerationRejected() {

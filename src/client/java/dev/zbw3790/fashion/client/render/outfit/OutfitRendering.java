@@ -83,6 +83,10 @@ public final class OutfitRendering {
         prepare(state, player.orElse(null), Scene.WORLD);
     }
 
+    public static void prepareInventory(AvatarRenderState state, Optional<UUID> player) {
+        prepare(state, player.orElse(null), Scene.VANILLA_INVENTORY);
+    }
+
     public static void preparePreview(AvatarRenderState state, UUID player) {
         prepare(state, player, Scene.WARDROBE_PREVIEW);
     }
@@ -232,7 +236,15 @@ public final class OutfitRendering {
                 ModelPart tree = frame.outers().get(part);
                 if (tree == null) continue;
                 RenderType type = frame.types().get(part);
-                collector.submitModel(new Model.Simple(binding.snapshots().copyBodyTree(tree, part, false, true), ignored -> type), Unit.INSTANCE,
+                // 原版物品栏在提取返回后调整 GUI 姿态；LivingEntityRenderer 此时已按最终状态 setupAnim。
+                // 只复制本次提交的原版模型，绝不把共享模型放入延迟队列，也不按 tick 缓存。
+                ModelPart submitted = frame.input().scene() == Scene.VANILLA_INVENTORY
+                        ? binding.snapshots().bodyPart(binding.source(), part, false, true)
+                        : binding.snapshots().copyBodyTree(tree, part, false, true);
+                // 原版外层已被本帧决策抑制；仅恢复独立副本的自定义外层，保留原始皮肤开关门禁。
+                if (frame.input().scene() == Scene.VANILLA_INVENTORY)
+                    submitted.getChild(OutfitPartSnapshots.baseName(part)).getChild(OutfitPartSnapshots.outerName(part)).visible = true;
+                collector.submitModel(new Model.Simple(submitted, ignored -> type), Unit.INSTANCE,
                         OutfitPartSnapshots.copyPose(pose), type, light, overlay, color, null, state.outlineColor, null);
             }
         }

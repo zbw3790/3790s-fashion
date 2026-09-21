@@ -13,7 +13,7 @@ public final class FullFashionSelectionHandler {
     public static Optional<Outcome> process(UUID player, Object connection, SetFullFashionSelectionPayload request,
             PlayerFashionService service, FashionAuthorityRoute route, boolean resultSupported) {
         if (!resultSupported || !service.isCurrent(player, connection)) return Optional.empty();
-        var mutation = service.apply(player, connection, route == FashionAuthorityRoute.V2,
+        var mutation = service.apply(player, connection, route == FashionAuthorityRoute.V4,
                 request.expectedRevision(), request.stored());
         var update = mutation.changed()
                 ? mutation.authority().map(state -> new FullPlayerFashionEntry(player, state))
@@ -35,7 +35,7 @@ public final class FullFashionSelectionHandler {
             case UNDECIDED -> Optional.empty();
             case LEGACY -> Optional.of(new PlayerFashionUpdatePayload(
                     new PlayerFashionEntry(entry.playerId(), entry.state().capeProjection())));
-            case V2 -> Optional.of(entry.state().stored().isDefault()
+            case V4 -> Optional.of(entry.state().stored().isDefault()
                     ? new FullPlayerFashionRemovePayload(entry.playerId(), entry.state().revision(),
                             FullPlayerFashionRemovePayload.Reason.DEFAULT)
                     : new FullPlayerFashionUpdatePayload(entry));

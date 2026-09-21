@@ -70,14 +70,17 @@ final class WardrobeGuiPainter {
 
     static void frameWithTabs(RectangleSink sink, WardrobeLayout layout, int selected) {
         var frame = layout.frameBounds();
-        var inactive = layout.tabBounds(1 - selected);
-        // 未选中页签的下阴影在主框上方结束，下黑边与主框顶边共用一行。
-        tabBody(sink, inactive, frame.y());
-        rect(sink, inactive.x() + 3, frame.y() - 2, inactive.width() - 4, 2, SHADOW_COLOR);
+        for (int index=0;index<3;index++) if (index!=selected) {
+            var inactive=layout.tabBounds(index);
+            // 未选中页签阴影在主框上方结束。
+            tabBody(sink,inactive,frame.y());
+            rect(sink,inactive.x()+3,frame.y()-2,inactive.width()-4,2,SHADOW_COLOR);
+        }
         frame(sink, frame, true);
         selectedTab(sink, layout.tabBounds(selected), layout.tabJoinBounds(selected), selected == 0);
         capeIcon(sink, layout.tabIconBounds(0));
         outfitIcon(sink, layout.tabIconBounds(1));
+        armorIcon(sink, layout.tabIconBounds(2));
     }
 
     // 项目衬衫品牌色；只作用于 Outfit 图标，不改变 Cape、原版控件或状态色。
@@ -93,6 +96,7 @@ final class WardrobeGuiPainter {
             "....hjjjjjjh....", "....hhhhhhhh....", "................", "................"
     };
 
+    static void armorIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) { ArmorTabIcon.paint(sink,bounds); }
     static void outfitIcon(RectangleSink sink, WardrobeLayout.Bounds bounds) {
         icon(sink, bounds, OUTFIT_ICON);
     }

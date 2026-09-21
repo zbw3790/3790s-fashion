@@ -26,31 +26,31 @@ class FullFashionServiceTest {
     PlayerFashionStoredState costume(){var parts=OutfitSelections.original();for(var part:OutfitPart.CANONICAL_ORDER)parts=parts.with(part,OutfitPartSelection.outfit(new OutfitId("robe")));return new PlayerFashionStoredState(Optional.of(FOUNDER),parts);}
     @Test void realTransactionBroadcastProjectionAndResultShareOneCommit() throws Exception {
         var service=create(new PlayerFashionSavedData());
-        var outcome=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(7,0,costume()),service,FashionAuthorityRoute.V2,true).orElseThrow();
+        var outcome=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(7,0,costume()),service,FashionAuthorityRoute.V4,true).orElseThrow();
         var events=new ArrayList<String>();
         FullFashionSelectionHandler.deliver(outcome,entry->{
             events.add("UPDATE");
             assertEquals(service.authority(FIRST),Optional.of(entry.state()));
             assertEquals(outcome.result().authority(),Optional.of(entry.state()));
-            var full=(FullPlayerFashionUpdatePayload)FullFashionSelectionHandler.projection(FashionAuthorityRoute.V2,entry).orElseThrow();
+            var full=(FullPlayerFashionUpdatePayload)FullFashionSelectionHandler.projection(FashionAuthorityRoute.V4,entry).orElseThrow();
             assertEquals(entry,full.entry());
             var legacy=(PlayerFashionUpdatePayload)FullFashionSelectionHandler.projection(FashionAuthorityRoute.LEGACY,entry).orElseThrow();
             assertEquals(entry.state().capeProjection(),legacy.entry().state());
             assertTrue(FullFashionSelectionHandler.projection(FashionAuthorityRoute.UNDECIDED,entry).isEmpty());
         },result->{events.add("RESULT");assertEquals(7,result.requestId());assertEquals(FullFashionSelectionStatus.SUCCESS,result.status());assertEquals(service.authority(FIRST),result.authority());});
         assertEquals(List.of("UPDATE","RESULT"),events);
-        var noop=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(8,1,costume()),service,FashionAuthorityRoute.V2,true).orElseThrow();
+        var noop=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(8,1,costume()),service,FashionAuthorityRoute.V4,true).orElseThrow();
         FullFashionSelectionHandler.deliver(noop,e->fail("无变化不得广播。"),r->assertEquals(1,r.authority().orElseThrow().revision()));
-        var conflict=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(9,0,PlayerFashionStoredState.DEFAULT),service,FashionAuthorityRoute.V2,true).orElseThrow();
+        var conflict=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(9,0,PlayerFashionStoredState.DEFAULT),service,FashionAuthorityRoute.V4,true).orElseThrow();
         FullFashionSelectionHandler.deliver(conflict,e->fail("CAS 拒绝不得广播。"),r->assertEquals(FullFashionSelectionStatus.CONFLICT,r.status()));
-        var cleared=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(10,1,PlayerFashionStoredState.DEFAULT),service,FashionAuthorityRoute.V2,true).orElseThrow();
-        var remove=(FullPlayerFashionRemovePayload)FullFashionSelectionHandler.projection(FashionAuthorityRoute.V2,cleared.update().orElseThrow()).orElseThrow();
+        var cleared=FullFashionSelectionHandler.process(FIRST,connection,new SetFullFashionSelectionPayload(10,1,PlayerFashionStoredState.DEFAULT),service,FashionAuthorityRoute.V4,true).orElseThrow();
+        var remove=(FullPlayerFashionRemovePayload)FullFashionSelectionHandler.projection(FashionAuthorityRoute.V4,cleared.update().orElseThrow()).orElseThrow();
         assertEquals(FullPlayerFashionRemovePayload.Reason.DEFAULT,remove.reason());assertEquals(cleared.result().authority().orElseThrow().revision(),remove.revision());
     }
     @Test void missingResultAndOldConnectionCannotMutateThroughActualHandler() throws Exception {
         var data=new PlayerFashionSavedData();var service=create(data);var request=new SetFullFashionSelectionPayload(1,0,costume());
-        assertTrue(FullFashionSelectionHandler.process(FIRST,connection,request,service,FashionAuthorityRoute.V2,false).isEmpty());
-        assertTrue(FullFashionSelectionHandler.process(FIRST,new Object(),request,service,FashionAuthorityRoute.V2,true).isEmpty());
+        assertTrue(FullFashionSelectionHandler.process(FIRST,connection,request,service,FashionAuthorityRoute.V4,false).isEmpty());
+        assertTrue(FullFashionSelectionHandler.process(FIRST,new Object(),request,service,FashionAuthorityRoute.V4,true).isEmpty());
         var refused=FullFashionSelectionHandler.process(FIRST,connection,request,service,FashionAuthorityRoute.LEGACY,true).orElseThrow();
         assertEquals(FullFashionSelectionStatus.PROTOCOL_REJECT,refused.result().status());assertTrue(refused.update().isEmpty());
         assertFalse(data.isDirty());assertEquals(0,service.authority(FIRST).orElseThrow().revision());

@@ -21,7 +21,7 @@ class ReleaseArchitectureAuditTest {
 			"CapeAssetDataPayload", "PlayerFashionSnapshotPayload", "PlayerFashionUpdatePayload",
 			"PlayerFashionRemovePayload", "CapeSelectionResultPayload",
             "FullPlayerFashionSnapshotPayload", "FullPlayerFashionUpdatePayload", "FullPlayerFashionRemovePayload",
-            "FullFashionSelectionResultPayload", "OutfitRegistrySnapshotPayload", "OutfitAssetDataPayload", "OutfitRegistryRefreshPayload");
+            "FullFashionSelectionResultPayload", "OutfitRegistrySnapshotPayload", "OutfitAssetDataPayload", "OutfitRegistryRefreshPayload", "ArmorRegistryPayload", "ArmorAssetDataPayload");
 
 	@Test
 	void mainSourceSetContainsNoClientOnlyReferences() throws IOException {
@@ -48,10 +48,11 @@ class ReleaseArchitectureAuditTest {
 	}
 
 	@Test
-	void allFifteenClientReceiversUseCurrentConnectionGate() {
+	void allClientReceiversUseCurrentConnectionGate() {
 		String network = read(root().resolve(
 				"src/client/java/dev/zbw3790/fashion/client/network/Fashion3790ClientNetworking.java"))
-                + read(root().resolve("src/client/java/dev/zbw3790/fashion/client/network/ClientFullFashionNetworking.java"));
+                + read(root().resolve("src/client/java/dev/zbw3790/fashion/client/network/ClientFullFashionNetworking.java"))
+                + read(root().resolve("src/client/java/dev/zbw3790/fashion/client/network/ClientArmorNetworking.java"));
 		var matcher = Pattern.compile("registerCurrentConnectionReceiver\\(\\s*(\\w+Payload)\\.TYPE")
 				.matcher(network);
 		Set<String> registered = new HashSet<>();
@@ -124,7 +125,7 @@ class ReleaseArchitectureAuditTest {
 		try (var files = Files.walk(project.resolve("src/client/java"))) {
 			mixins = files.filter(path -> path.getFileName().toString().endsWith("Mixin.java")).toList();
 		}
-		assertEquals(Set.of("WingsLayerMixin.java", "ItemInHandRendererMixin.java", "LivingEntityRendererMixin.java"),
+		assertEquals(Set.of("WingsLayerMixin.java", "ItemInHandRendererMixin.java", "LivingEntityRendererMixin.java", "HumanoidArmorLayerMixin.java", "EquipmentLayerRendererMixin.java", "ArmorTextureLifetimeMixin.java", "InventoryScreenMixin.java"),
 				mixins.stream().map(path -> path.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
 		String config = read(project.resolve("src/client/resources/fashion_3790.client.mixins.json"));
 		String mixin = read(project.resolve("src/client/java/dev/zbw3790/fashion/client/mixin/WingsLayerMixin.java"));

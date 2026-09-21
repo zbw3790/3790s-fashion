@@ -1,6 +1,14 @@
 # 兼容性说明
 
-## 当前 v0.4.0
+## 当前 v0.5.0
+
+完整 Cape／Outfit／Armor 需要双端 0.5.0；Full authority 使用 `_v4`，schema 4。相同新 namespace 的 v0.4.0 端按 capability 使用 legacy Cape，不能完整编辑 Outfit／Armor，Cape-only 请求保留服务器其他字段。v0.3.x 旧 namespace 不提供跨版本 Fashion 桥接。True Vanilla 仍按能力防护，不能使用时装功能。
+
+新安装无需附属或 API helper；四槽 Original／Hidden／Custom 只影响绘制。真实胸槽 Elytra、linked 外观与主动试穿保持。对于本次固定验证的 Elytra Slot 0.1.0 组合，世界既有支持保持；原版物品栏尚未同步额外 BODY 翼及对应披风遮挡，真实 BODY 驱动的衣柜组合预览未纳入本次发行。新的 GUI 合作由用户延期，不是全 GUI 兼容承诺。
+
+正常停服并备份后升级；schema 1/2 的 Armor 默认 Original，schema 3 Hidden 保留，实际修改后写 schema 4。坏文件或未来 schema 保留原件并写保护；降级应恢复备份，不能将已升级世界交给旧版。资源与配置路径保持 v0.4.0 新身份，reload 共同处理 Outfit＋Armor，不重载 Cape。
+
+## v0.4.0 历史说明
 
 当前品牌为 3790's Fashion，真实 MOD ID 与频道 namespace 为 `fashion_3790`。完整功能需要双端均使用 v0.4.0；不承诺 v0.3.x 跨版本 Fashion 联网，不发送旧 namespace 的双协议。Fabric 提供 `vanilla_fashion` 依赖别名仅为旧依赖识别。
 

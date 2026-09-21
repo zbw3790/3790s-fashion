@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 
 /** 固定清除动作等待 ACK 时保留亮度，输入仍使用真正的禁用状态。 */
-final class WardrobeOutfitActionButton extends Button {
+class WardrobeOutfitActionButton extends Button {
     private static final WidgetSprites SPRITES=new WidgetSprites(
             Identifier.withDefaultNamespace("widget/button"),
             Identifier.withDefaultNamespace("widget/button_disabled"),
@@ -18,7 +18,11 @@ final class WardrobeOutfitActionButton extends Button {
     private boolean pendingAppearance;
 
     WardrobeOutfitActionButton(WardrobeLayout.Bounds bounds,String label,Runnable action) {
-        super(bounds.x(),bounds.y(),bounds.width(),bounds.height(),Component.literal(label),
+        this(bounds,Component.literal(label),action);
+    }
+
+    WardrobeOutfitActionButton(WardrobeLayout.Bounds bounds,Component label,Runnable action) {
+        super(bounds.x(),bounds.y(),bounds.width(),bounds.height(),label,
                 button -> action.run(),DEFAULT_NARRATION);
     }
 

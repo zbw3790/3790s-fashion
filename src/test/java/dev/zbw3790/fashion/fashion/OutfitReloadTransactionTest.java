@@ -17,7 +17,7 @@ class OutfitReloadTransactionTest {
         root=temp.resolve("outfits");robe=S03TestAssets.outfit(root,"robe",OutfitPart.ALL,true,false);
         S03TestAssets.outfit(root,"other",OutfitPart.ALL,true,false);
         data=new PlayerFashionSavedData();service=service(data,valid(temp));
-        service.reconcile(valid(temp),new OutfitRegistryLoader(4096).load(root),e->{});
+        service.reconcile(valid(temp),new OutfitRegistryLoader(4096).load(root),new dev.zbw3790.fashion.armor.ArmorRegistryLoader().load(temp.resolve("armor")),e->{});
         service.join(FIRST,connection,e->{});service.apply(FIRST,connection,true,0,costume("robe"));
         service.join(SECOND,new Object(),e->{});data.setDirty(false);
     }

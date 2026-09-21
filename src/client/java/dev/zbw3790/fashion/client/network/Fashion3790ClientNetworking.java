@@ -45,7 +45,7 @@ public final class Fashion3790ClientNetworking {
 		boolean selectionResultRegistered = registerCurrentConnectionReceiver(
 				CapeSelectionResultPayload.TYPE, (payload, context) -> {
 					var handler = context.client().getConnection();
-                    if (playerFashions.route()==dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V2) return;
+                    if (playerFashions.route()==dev.zbw3790.fashion.fashion.FashionAuthorityRoute.V4) return;
 					if (handler == null) {
 						return;
 					}

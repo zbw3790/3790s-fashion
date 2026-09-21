@@ -1,5 +1,25 @@
 # 更新记录
 
+## v0.5.0 — 盔甲外观与衣柜改进
+
+- 新增头盔、胸甲、护腿、靴子四槽 Original／Hidden／Custom 外观，保留真实装备属性、耐久、染色、饰纹和附魔语义。
+- Armor 页采用与 Outfit 一致的部位入口、固定动作、4×2 正面纹理样片和完整三维预览；Cape／Outfit／Armor 共用草稿和一次 Apply。
+- 盔甲资源由服务器同步，支持同 ID 换图、手动 reload、缺失回退和恢复；保存失效引用，无需为恢复纹理重新应用。
+- 修复原版物品栏中 Outfit 与 Base 的动态姿态错位；Survival 与 Creative 自身页按实际 GUI 最终姿态绘制，每次提交保持独立快照。
+- 盔甲架原版动作优先，次要使用绕过衣柜；主动 ELYTRA 试穿可保留胸甲外观，Preview 与真实装备隔离。
+
+## 安装与升级
+
+Minecraft 26.2、Fabric、Java 25；双端一起升级。停止游戏／服务器并备份配置和世界，再替换旧主 JAR。schema 1/2 默认盔甲原版，schema 3 隐藏位保留，实际修改后写 schema 4。旧版不能读取已升级保存，降级应恢复升级前备份。
+
+完整 Fashion 使用 Full v4；与 v0.4.0 只按能力降级为 Cape，不提供跨版本完整 Outfit／Armor 编辑。不承诺 v0.3.x 旧 namespace 桥接。管理员 `/fashion3790 reload` 共同重载 Outfit＋Armor，Cape 仍需重启。
+
+## 已知限制
+
+对于本次固定验证的 Elytra Slot 组合，世界既有支持保持；原版物品栏尚未同步额外 BODY 翼及对应披风遮挡，真实 BODY 驱动的衣柜组合预览未纳入本次发行。新的附属 GUI 合作已延期，不承诺版本或日期。此限制不影响主 Mod 单装、原版真实胸槽 Elytra 和主动 CAPE／ELYTRA 试穿。
+
+只替换标准盔甲基础纹理，不提供自定义 3D 几何、资源上传或热重载管理 GUI。开发构建仍需接口 Owner 提供固定 Visual Contract v1 compile-only JAR；它不随玩家安装包分发，也不应放入 mods。
+
 ## v0.4.0 — 3790's Fashion
 
 ## 主要变化

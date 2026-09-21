@@ -13,15 +13,16 @@ class WardrobeInteractionRulesTest {
         for(var result:new InteractionResult[]{InteractionResult.SUCCESS,InteractionResult.SUCCESS_SERVER,InteractionResult.CONSUME,InteractionResult.FAIL})
             assertFalse(WardrobeInteractionRules.matches(true,false,result));
     }
-    @Test void clientConsumesWithoutCallingServerOpenAndWithoutItemOrSwingSideEffects() {
+    @Test void clientPredictsServerSwingWithoutCallingOpenOrSwingLocally() {
         var result=WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,true,true,()->{fail("客户端不能发送开窗。");return false;});
-        assertTrue(result.consumesAction());assertEquals(InteractionResult.CONSUME.withoutItem(),result);
+        assertTrue(result.consumesAction());assertEquals(InteractionResult.SUCCESS_SERVER.withoutItem(),result);
     }
     @Test void unsupportedServerLeavesVanillaPass() {
         assertSame(InteractionResult.PASS,WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,true,false,()->{fail();return false;}));
     }
     @Test void serverSendsOnceAndConsumesOnlySuccessfulOpen() {
         var opens=new AtomicInteger();assertTrue(WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,false,false,()->{opens.incrementAndGet();return true;}).consumesAction());
+        assertEquals(InteractionResult.SwingSource.SERVER,((InteractionResult.Success)WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,false,false,()->true)).swingSource());
         assertEquals(1,opens.get());assertSame(InteractionResult.PASS,WardrobeInteractionHandler.fallback(InteractionResult.PASS,true,false,false,()->false));
     }
     @Test void consumedVanillaResultsAreNeverOpenedAgain() {

@@ -224,18 +224,14 @@ class WardrobeScreenInteractionTest {
 	}
 
 	@Test
-	void twoTabsAndOneFormalApplyExist() {
-		var screen = new Fixture().open();
-		assertArrayEquals(new WardrobeScreen.SelectedTab[] {WardrobeScreen.SelectedTab.CAPE,WardrobeScreen.SelectedTab.OUTFIT},
-				WardrobeScreen.SelectedTab.values());
-		var actions = screen.children().stream().filter(Button.class::isInstance)
-				.filter(widget -> !(widget instanceof ImageButton)).map(Button.class::cast).toList();
-		assertEquals(1, actions.size());
-		assertEquals("应用", actions.getFirst().getMessage().getString());
-		assertFalse(screen.children().stream().filter(AbstractWidget.class::isInstance)
-				.map(AbstractWidget.class::cast).map(widget -> widget.getMessage().getString())
-				.anyMatch(message -> List.of("取消", "完成", "Outfit", "Armor", "开发中").contains(message)));
-	}
+    void threeTabsShareOneFormalApplyAndOneCancel() {
+        var screen=new Fixture().open();
+        assertArrayEquals(new WardrobeScreen.SelectedTab[] {WardrobeScreen.SelectedTab.CAPE,WardrobeScreen.SelectedTab.OUTFIT,WardrobeScreen.SelectedTab.ARMOR},WardrobeScreen.SelectedTab.values());
+        var actions=screen.children().stream().filter(Button.class::isInstance).filter(widget -> !(widget instanceof ImageButton)).map(Button.class::cast).toList();
+        assertEquals(2,actions.size());
+        assertEquals(1,actions.stream().filter(button -> button.getMessage().getString().equals("应用")).count());
+        assertEquals(1,actions.stream().filter(button -> button instanceof WardrobeArmorButton armor && armor.key().equals("cancel")).count());
+    }
 
 	@Test
 	void capabilityAndConnectionGateStillBlockApplyIncludingNoChange() {

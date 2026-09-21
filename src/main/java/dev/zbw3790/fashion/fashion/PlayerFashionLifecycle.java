@@ -71,7 +71,10 @@ public final class PlayerFashionLifecycle {
 		PlayerFashionService service = new PlayerFashionService(loaded, knowledge);
 		var outfits = new dev.zbw3790.fashion.outfit.OutfitRegistryLoader(4096).load(capesRoot.resolveSibling("outfits"));
 		dev.zbw3790.fashion.outfit.OutfitDiagnostic.report(outfits.diagnostics(), logger);
-		PlayerFashionService.ReconciliationResult reconciled = service.reconcile(knowledge, outfits, entry -> { });
+        var armor = new dev.zbw3790.fashion.armor.ArmorRegistryLoader().load(capesRoot.resolveSibling("armor"));
+        armor.diagnostics().forEach(message -> logger.warn("{}",message));
+        logger.info("3790's Fashion 盔甲 Registry：可信={}，定义={}，内容={}。",armor.snapshot().available(),armor.snapshot().entries().size(),armor.assets().size());
+		PlayerFashionService.ReconciliationResult reconciled = service.reconcile(knowledge, outfits, armor, entry -> { });
 		logger.info("3790's Fashion 装束 Registry：可信={}，定义={}，内容={}。", outfits.knowledge().trustworthy(), outfits.registry().size(), outfits.assets().size());
 		services.put(storage, service);
 		logger.info("3790's Fashion 玩家时装服务已加载：保存记录 {}，明确删除 {}，休眠 {}，状态 {}。",

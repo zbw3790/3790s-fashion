@@ -8,14 +8,14 @@
 
 ## 安装需求
 
-- 版本：`0.4.0`
+- 版本：`0.5.0`
 - Mod ID：`fashion_3790`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
 - Java：`25`；从源码构建需要 JDK 25
 
-客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `3790s-fashion-0.4.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `3790s-fashion-0.5.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
 
 v0.4.0 将技术身份统一为 `fashion_3790`，保留现有披风、装束和衣柜行为，并纳入已联合验证的 Elytra Slot Visual Contract v1。继续使用原创 Outfit 衬衫 Logo、`#3790FF` 主色和 Outfit Tab 配色。当前 Logo 不再嵌入 Minecraft 原版盔甲架 sprite，图像由确定性脚本生成，未使用 AI。
 
@@ -23,11 +23,11 @@ v0.4.0 将技术身份统一为 `fashion_3790`，保留现有披风、装束和�
 
 - 把原版盔甲架当作衣柜入口：完整原版交互优先，没有原版动作时才打开衣柜，不要求空手或空架。
 - Outfit 支持 PNG-only 资源；服主可执行 `/fashion3790 reload` 手动热重载装束，新端无需重连或重新应用。
-- Creative Inventory 风格衣柜，支持 Standard / Compact 自适应布局、Cape／Outfit 两页签、4×3 披风列表和 4×2 装束列表。
+- Creative Inventory 风格衣柜，支持 Standard / Compact 自适应布局、Cape／Outfit／Armor 三页签、4×3 披风列表和 4×2 装束列表。
 - Outfit 可替换头部、身体、左右袖和左右裤腿六个原版外层部位，支持 WIDE／SLIM；可按整套、分组或单部位选择，保留原版、隐藏外层或形成混搭。
 - 在带边框的深灰区域居中预览玩家，切换披风／鞘翅模型无需更换真实装备；支持“原版”选项和分页浏览，垂直跟随更平缓。
-- Cape 与 Outfit 共用一份草稿和一次“应用”，由服务器确认、保存并同步给其他在线玩家；成功后保持衣柜打开，可以继续调整，等待期间图标保持亮度。
-- 装束显示于世界第三人称、第一人称手臂和衣柜 Preview；网格使用正面二维样片，顶部 Cape／Outfit 页签分别将预览转向背面／正面，之后仍可自由旋转。
+- Cape、Outfit 与 Armor 共用一份草稿和一次“应用”，由服务器确认、保存并同步给其他在线玩家；成功后保持衣柜打开，可以继续调整，等待期间图标保持亮度。
+- 装束显示于世界第三人称、第一人称手臂和衣柜 Preview 和原版物品栏；物品栏外层随当前鼠标姿态同步，网格使用正面二维样片，顶部 Cape／Outfit 页签分别将预览转向背面／正面，之后仍可自由旋转。
 - 支持 Cape-only、Split、Shared 三种资产布局；自定义 Elytra 外观跟随所选披风，不单独选择。
 - 资产暂时损坏时安全回退为原版外观，修复后可以恢复。
 
@@ -77,13 +77,23 @@ PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素�
 /fashion3790 reload
 ```
 
-当前客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令仅重载 Outfit，不重载 Cape，也不提供实时文件监听。
+当前客户端自动更新世界、衣柜 Preview 和网格缩略，无需重新 Apply。可信删除装束目录只将引用它的部位恢复为 Original，Cape 和其他部位保持；根目录不可用时保留现有资源与选择，目录仍存在但无效时保留保存引用并回退显示。此命令重载 Outfit 与 Armor，不重载 Cape，也不提供实时文件监听。
+
+## 服主与玩家：盔甲外观
+
+Armor 页采用四部位入口＋4×2 正面样片网格。先选择头盔、胸甲、护腿或靴子，再选“原版”“隐藏”或自定义纹理；真实装备、属性、耐久、染色、饰纹和附魔不被修改。没有 Armor 资源时仍可使用原版／隐藏。
+
+资源放在 `config/3790s-fashion/armor/<id>/`，由 `armor.json` 和声明的 `outer.png`／`inner.png` 组成；PNG 为 64×32、8 位 RGBA、非交错，Alpha 仅 0/255。详细格式、限额和示例见 [盔甲资源说明](docs/armor-resources.md)。管理员 `/fashion3790 reload` 同步重载 Outfit 与 Armor；样式暂时缺失会保留保存 ID 并回退，恢复后自动生效，无需重新 Apply。
+
+主动 ELYTRA 试穿保留真实胸甲的 Original／Hidden／Custom 外观，同时只绘制一副预览翼；切换仅影响预览，关闭或取消不会更改装备。
+
+对于本次固定验证的 Elytra Slot 组合，世界既有支持保持；原版物品栏尚未同步额外 BODY 翼及对应披风遮挡，真实 BODY 驱动的衣柜组合预览未纳入本次发行。新的附属 GUI 合作已延期，不承诺具体版本或日期；原版真实胸槽 Elytra 和主动试穿仍受支持。
 
 ## 玩家：使用衣柜
 
 1. 找到一个原版盔甲架，架子已有装备也可以使用。
-2. 右键盔甲架：先执行完整原版交互，没有原版动作时打开衣柜；普通无交互物品或无可执行原版动作的空手均可使用。放上、取下装备仍由原版优先处理，不会同时开衣柜。
-3. 在 Cape／Outfit 页签中浏览和选择；装束可设置整套、分组或详细部位，并使用“原版／无外层”。两页签的修改汇入同一草稿。右上按钮可切换披风／鞘翅，仅影响预览，不改变真实装备。
+2. 右键盔甲架：先执行完整原版交互，没有原版动作且未按住次要使用时打开衣柜；按住次要使用（通常为潜行键）可绕过衣柜，普通无交互物品或无可执行原版动作的空手均可使用。放上、取下装备仍由原版优先处理，不会同时开衣柜。
+3. 在 Cape／Outfit／Armor 页签中浏览和选择；装束可设置整套、分组或详细部位，并使用“原版／无外层”。三页签的修改汇入同一草稿。右上按钮可切换披风／鞘翅，仅影响预览，不改变真实装备。
 4. 点击“应用”提交选择；服务器确认成功后保持同一衣柜窗口，可以继续选择和应用。
 5. 按 ESC 或当前物品栏绑定键（默认 E）关闭衣柜，会丢弃尚未应用的草稿。
 
@@ -94,15 +104,15 @@ PNG-only 模式从六个原版外层部位的全部 UV 面识别非透明像素�
 - 未安装本 Mod 的原版客户端可以进入安装了本 Mod 的服务器，但不能使用衣柜或显示自定义披风／装束。
 - 安装了本 Mod 的客户端可以进入原版服务器；此时不提供衣柜和服务器时装功能。
 
-v0.4.0 保持业务 schema 2。停服并备份后升级：新配置根 `config/3790s-fashion/` 不存在时，从 `config/vanilla-fashion/` 完整复制，保留全部旧文件；新目录已存在则只使用新目录，不合并旧资产。迁移时不要并发修改目录；遇到链接、访问失败或不完整复制会停止启动，避免空 Registry 错误清除选择。
+v0.5.0 使用业务 schema 4；读取旧 schema 1/2 时 Armor 默认为 Original，读取 schema 3 时保留 Hidden。仅实际修改后按 schema 4 保存，单纯读取不标脏。停服并备份后升级：新配置根 `config/3790s-fashion/` 不存在时，从 `config/vanilla-fashion/` 完整复制，保留全部旧文件；新目录已存在则只使用新目录，不合并旧资产。迁移时不要并发修改目录；遇到链接、访问失败或不完整复制会停止启动，避免空 Registry 错误清除选择。
 
-世界保存由 `data/vanilla_fashion/player_fashion.dat` 验证后复制到 `data/fashion_3790/player_fashion.dat`，只注册新位置的一份权威状态，保留旧文件。坏文件不会被默认状态覆盖，新位置优先且不会因坏文件回退旧副本。Cape／Outfit ID、Original、None、dormant 与玩家记录原样保留。旧 schema v1 继续在实际修改后才写成 v2，不增加 schema 3。新路径使用后旧副本不再同步，降级前必须自行恢复正确备份，不能直接把旧副本当成最新存档。
+世界保存由 `data/vanilla_fashion/player_fashion.dat` 验证后复制到 `data/fashion_3790/player_fashion.dat`，只注册新位置的一份权威状态，保留旧文件。坏文件不会被默认状态覆盖，新位置优先且不会因坏文件回退旧副本。Cape／Outfit ID、Original、None、dormant 与玩家记录原样保留。旧 schema 1/2/3 在实际修改后写成 schema 4，保留 Cape、Outfit 和旧隐藏值。新路径使用后旧副本不再同步，降级前必须自行恢复正确备份，不能直接把旧副本当成最新存档。
 
 客户端缓存改用 `3790s-fashion/cache/`，由服务器提供的内容重新建立，旧缓存不删除。所有网络频道使用 `fashion_3790:*`，不提供 v0.4.0 与 v0.3.x 的跨版本 Fashion 联网；客户端与服务器应一起升级。`provides: vanilla_fashion` 只是 Fabric 依赖别名，不是旧协议桥接。
 
 可选兼容 **3790's Elytra Slot 0.1.0**（Visual Contract v1）。附属需另行安装，不随主 Mod 分发，也不是主 Mod 必需依赖。其 `elytra_slot_3790:visual_contract = 1`、`elytra_slot_3790:visual_compatibility` 及接口语义保持。主 Mod 不负责真实 BODY 槽位或翼部提交，不复制附属功能。
 
-Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属或 Armor Visual。历史 v0.3.x 功能与制品仍保留在原版本 Tag／Release，不能将旧网络兼容矩阵当作 v0.4.0 的跨版本承诺。
+Cape 定义在服务器启动时加载，Outfit 另支持上述手动 reload。当前不提供资源上传／编辑、权限／entitlement 或热重载管理 GUI，不包含 Elytra Slot 附属。历史 v0.3.x 功能与制品仍保留在原版本 Tag／Release，不能将旧网络兼容矩阵当作 v0.4.0 的跨版本承诺。
 
 详细的双向兼容行为见[兼容性说明](docs/compatibility.md)。
 
@@ -116,7 +126,7 @@ Windows PowerShell：
 .\gradlew.bat -PelytraSlotVisualApiJar=C:/path/3790s-elytra-slot-visual-api-1.jar clean build --console=plain
 ```
 
-正式 Mod JAR 输出到 `build/libs/3790s-fashion-0.4.0.jar`。
+正式 Mod JAR 输出到 `build/libs/3790s-fashion-0.5.0.jar`。
 
 如需重建包含 README、许可证和 Cape 模板的完整发布 ZIP：
 

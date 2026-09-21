@@ -46,6 +46,9 @@ public final class PlayerFashionNetworking {
         PayloadTypeRegistry.clientboundPlay().register(OutfitAssetDataPayload.TYPE, OutfitAssetDataPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(SetFullFashionSelectionPayload.TYPE, SetFullFashionSelectionPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(OutfitAssetRequestPayload.TYPE, OutfitAssetRequestPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ArmorRegistryPayload.TYPE, ArmorRegistryPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ArmorAssetDataPayload.TYPE, ArmorAssetDataPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ArmorAssetRequestPayload.TYPE, ArmorAssetRequestPayload.CODEC);
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             FashionServerTasks.requireServerThread(server);
             networking.channels.start(server);
@@ -93,6 +96,14 @@ public final class PlayerFashionNetworking {
                         { if (ServerPayloadSender.sendIfSupported(sender.connection, new OutfitAssetDataPayload(hash, asset.bytes())))
                             logger.debug("装束内容已发送：hash={}，字节={}。", hash.substring(0,12),asset.size()); });
         }))) throw new IllegalStateException("装束资产请求接收器重复注册。");
+        if (!ServerPlayNetworking.registerGlobalReceiver(ArmorAssetRequestPayload.TYPE, (payload,context) -> networking.execute(context.server(),channel -> {
+            var service=Fashion3790.playerFashionService(context.server());var sender=context.player();
+            if (service.isEmpty() || !service.orElseThrow().isCurrent(sender.getUUID(),sender.connection) || channel.route(sender.connection)!=FashionAuthorityRoute.V4
+                    || !ServerPayloadSender.canSend(sender.connection,ArmorAssetDataPayload.TYPE)) return;
+            for (String hash:channel.armorAssets.claim(sender.connection,payload)) channel.armorAssets.asset(sender.connection,hash).ifPresent(asset -> {
+                if (ServerPayloadSender.sendIfSupported(sender.connection,new ArmorAssetDataPayload(hash,asset.bytes()))) logger.debug("盔甲内容已发送：hash={}，字节={}。",hash,asset.size());
+            });
+        }))) throw new IllegalStateException("盔甲资产请求接收器重复注册。");
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> networking.execute(server, channel -> Fashion3790.playerFashionService(server).ifPresent(service -> {
             var id=handler.getPlayer().getUUID();
             int previous=service.onlineCount();
@@ -148,13 +159,14 @@ public final class PlayerFashionNetworking {
         private Phase phase = Phase.RUNNING;
         final Map<Object, FashionAuthorityRoute> routes = new IdentityHashMap<>();
         final OutfitAssetRequestTracker assets = new OutfitAssetRequestTracker();
+        final ArmorAssetRequestTracker armorAssets = new ArmorAssetRequestTracker();
         final CapeAssetRequestTracker capes = new CapeAssetRequestTracker();
 
         boolean running() { return phase == Phase.RUNNING; }
         boolean beginStopping() {
             if (!running()) return false;
             phase = Phase.STOPPING;
-            routes.clear(); assets.clear(); capes.clear();
+            routes.clear(); assets.clear(); armorAssets.clear(); capes.clear();
             return true;
         }
         void finishStopped() { beginStopping(); phase = Phase.STOPPED; }
@@ -167,7 +179,7 @@ public final class PlayerFashionNetworking {
         boolean leave(PlayerFashionService service, UUID id, Object connection, Consumer<FullPlayerFashionEntry> broadcast) {
             if (!running() || !service.leave(id, connection, broadcast)) return false;
             // LEFT 已发且旧 membership 已释放，才清理这条连接的路由与预算。
-            routes.remove(connection); assets.close(connection); capes.close(id, connection);
+            routes.remove(connection); assets.close(connection); armorAssets.close(connection); capes.close(id, connection);
             return true;
         }
         FashionAuthorityRoute route(Object handler) { return routes.getOrDefault(handler, FashionAuthorityRoute.UNDECIDED); }
@@ -177,7 +189,9 @@ public final class PlayerFashionNetworking {
                     ServerPayloadSender.canSend(handler,PlayerFashionSnapshotPayload.TYPE));
         }
         private void initializeAssets(PlayerFashionService service, ServerGamePacketListenerImpl handler) {
-            if (route(handler)!=FashionAuthorityRoute.V2) return;
+            if (route(handler)!=FashionAuthorityRoute.V4) return;
+            if (ServerPayloadSender.sendIfSupported(handler,new ArmorRegistryPayload(service.registryGeneration(),service.armor().snapshot())))
+                armorAssets.open(handler,service.registryGeneration(),service.armor());
             var snapshot=service.outfits().map(OutfitRegistrySnapshot::from).orElseGet(OutfitRegistrySnapshot::unavailable);
             if (ServerPayloadSender.sendIfSupported(handler,new OutfitRegistrySnapshotPayload(snapshot))) {
                 service.outfits().ifPresent(loaded -> assets.open(handler,ConnectionOutfitAssetView.from(service.registryGeneration(),loaded)));
@@ -186,6 +200,12 @@ public final class PlayerFashionNetworking {
             }
         }
         private OutfitRegistryReloadService.Clients refresh(PlayerFashionService service, OutfitRegistryReloadService.Publication publication) {
+            for (Object connection:service.connections().values()) {
+                var handler=(ServerGamePacketListenerImpl)connection;
+                if (route(handler)==FashionAuthorityRoute.V4 && ServerPayloadSender.canSend(handler,ArmorRegistryPayload.TYPE)
+                        && armorAssets.refresh(handler,publication.generation(),service.armor()))
+                    ServerPayloadSender.sendIfSupported(handler,new ArmorRegistryPayload(publication.generation(),service.armor().snapshot()));
+            }
             var view=ConnectionOutfitAssetView.from(publication.generation(),publication.candidate());
             var counts=refreshAssets(service.connections().values(),view,
                     value -> ServerPayloadSender.canSend((ServerGamePacketListenerImpl)value,OutfitRegistryRefreshPayload.TYPE),
@@ -207,7 +227,7 @@ public final class PlayerFashionNetworking {
             return new OutfitRegistryReloadService.Clients(sent,pinned);
         }
         private void snapshot(PlayerFashionService service, ServerGamePacketListenerImpl handler) {
-            if (route(handler)==FashionAuthorityRoute.V2) ServerPayloadSender.sendIfSupported(handler,new FullPlayerFashionSnapshotPayload(service.fullSnapshot()));
+            if (route(handler)==FashionAuthorityRoute.V4) ServerPayloadSender.sendIfSupported(handler,new FullPlayerFashionSnapshotPayload(service.fullSnapshot()));
             else if (route(handler)==FashionAuthorityRoute.LEGACY) ServerPayloadSender.sendIfSupported(handler,
                     new PlayerFashionSnapshotPayload(PlayerFashionSnapshotBuilder.build(service.connections().keySet(),service)));
         }
@@ -215,7 +235,7 @@ public final class PlayerFashionNetworking {
         private void joined(PlayerFashionService service, FullPlayerFashionEntry entry) {
             service.connections().forEach((id,value) -> {
                 if (id.equals(entry.playerId())) return; var receiver=(ServerGamePacketListenerImpl)value;
-                if (route(receiver)==FashionAuthorityRoute.V2) ServerPayloadSender.sendIfSupported(receiver,new FullPlayerFashionUpdatePayload(entry));
+                if (route(receiver)==FashionAuthorityRoute.V4) ServerPayloadSender.sendIfSupported(receiver,new FullPlayerFashionUpdatePayload(entry));
                 else update(receiver,entry);
             });
         }
@@ -229,7 +249,7 @@ public final class PlayerFashionNetworking {
         private void left(PlayerFashionService service, FullPlayerFashionEntry leaving) {
             service.connections().forEach((id,value) -> {
                 if (id.equals(leaving.playerId())) return; var receiver=(ServerGamePacketListenerImpl)value;
-                if (route(receiver)==FashionAuthorityRoute.V2) ServerPayloadSender.sendIfSupported(receiver,new FullPlayerFashionRemovePayload(leaving.playerId(),leaving.state().revision(),FullPlayerFashionRemovePayload.Reason.LEFT));
+                if (route(receiver)==FashionAuthorityRoute.V4) ServerPayloadSender.sendIfSupported(receiver,new FullPlayerFashionRemovePayload(leaving.playerId(),leaving.state().revision(),FullPlayerFashionRemovePayload.Reason.LEFT));
                 else if (route(receiver)==FashionAuthorityRoute.LEGACY) ServerPayloadSender.sendIfSupported(receiver,new PlayerFashionRemovePayload(leaving.playerId()));
             });
         }

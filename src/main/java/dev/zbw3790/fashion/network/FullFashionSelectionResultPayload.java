@@ -11,8 +11,8 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
 public record FullFashionSelectionResultPayload(long requestId, FullFashionSelectionStatus status, Optional<FullPlayerFashionState> authority) implements CustomPacketPayload {
-    public static final Type<FullFashionSelectionResultPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_fashion_selection_result"));
-    public static final int MAX_BODY_BYTES = 481;
+    public static final Type<FullFashionSelectionResultPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Fashion3790.MOD_ID, "full_fashion_selection_result_v4"));
+    public static final int MAX_BODY_BYTES = 615;
     public static final StreamCodec<RegistryFriendlyByteBuf, FullFashionSelectionResultPayload> CODEC = StreamCodec.ofMember(FullFashionSelectionResultPayload::encode,
             buffer -> FashionWireCodec.decode(buffer, MAX_BODY_BYTES, FullFashionSelectionResultPayload::read));
     public FullFashionSelectionResultPayload { if (requestId <= 0) throw new IllegalArgumentException("请求标识必须为正数。"); Objects.requireNonNull(status); Objects.requireNonNull(authority); if (status == FullFashionSelectionStatus.SUCCESS && authority.isEmpty()) throw new IllegalArgumentException("成功结果必须携带权威。"); }

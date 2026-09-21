@@ -13,7 +13,7 @@ public final class S03PersistenceSubprocess {
             var listener=new SummaryGeneratingListener();
             session.getLauncher().registerTestExecutionListeners(listener);
             session.getLauncher().execute(LauncherDiscoveryRequestBuilder.request().selectors(selectMethod(
-                    "dev.zbw3790.fashion.fashion.FullFashionPersistenceTest#independentProcessReadsWrittenV2")).build());
+                    "dev.zbw3790.fashion.fashion.FullFashionPersistenceTest#independentProcessReadsWrittenCurrentSchema")).build());
             var summary=listener.getSummary();summary.printTo(new java.io.PrintWriter(System.out));
             if(summary.getTestsFoundCount()!=1 || summary.getTestsSucceededCount()!=1 || summary.getTotalFailureCount()!=0) {
                 summary.printFailuresTo(new java.io.PrintWriter(System.err));System.exit(1);
