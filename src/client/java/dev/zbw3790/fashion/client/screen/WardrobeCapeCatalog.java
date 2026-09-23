@@ -100,7 +100,7 @@ final class WardrobeCapeCatalog {
 		}
 
 		String displayName() {
-			return capeId().map(CapeId::value).orElse("原版");
+			return capeId().map(CapeId::value).orElse(WardrobeText.string("original"));
 		}
 	}
 }

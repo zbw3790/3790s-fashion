@@ -39,7 +39,7 @@ final class OutfitWardrobeContent {
         boolean changed=!entries.equals(nextEntries);
         entries=nextEntries;page=Math.min(page,pageCount()-1);
         widgets.forEach(OutfitGridEntryWidget::refresh);
-        if (scopeButton!=null) scopeButton.setMessage(Component.literal(scope.label+(session.conflicts(scope.targets)?" *":"")));
+        if (scopeButton!=null) scopeButton.setMessage(Component.literal(scope.label()+(session.conflicts(scope.targets)?" *":"")));
         boolean canClear=session.v2() && session.canEdit();
         boolean pendingAppearance=session.v2() && session.authorityKnown() && !session.closed() && session.waiting();
         if (original!=null) original.refresh(canClear,pendingAppearance);
@@ -76,21 +76,21 @@ final class OutfitWardrobeContent {
                 .anyMatch(part -> value.outfit().get(part).equals(OutfitPartSelection.outfit(id)))).isPresent();
     }
     String summary() {
-        if (!session.v2()) return "服务器不支持装束";
-        if (!session.authorityKnown()) return "尚未同步";
+        if (!session.v2()) return WardrobeText.string("outfit.unsupported");
+        if (!session.authorityKnown()) return WardrobeText.string("unknown");
         return session.fullSnapshot().map(value -> {
             var summary=value.outfit().summarize(scope.targets);
-            return summary instanceof OutfitSelections.Uniform uniform?label(uniform.selection()):"混搭";
-        }).orElse("加载中");
+            return summary instanceof OutfitSelections.Uniform uniform?label(uniform.selection()):WardrobeText.string("mixed");
+        }).orElse(WardrobeText.string("loading"));
     }
     static String label(OutfitPartSelection selection) {
         if (selection instanceof OutfitPartSelection.Outfit custom) return custom.id().value();
-        return selection==OutfitPartSelection.NONE?"无外层":"原版";
+        return selection==OutfitPartSelection.NONE?WardrobeText.string("outfit.none"):WardrobeText.string("original");
     }
     String resourceStatus() {
-        if (!session.v2()) return "服务器不支持装束";
-        if (source.state()==ClientOutfitRegistry.State.UNKNOWN) return "加载中";
-        if (source.state()!=ClientOutfitRegistry.State.KNOWN) return "装束服务不可用";
+        if (!session.v2()) return WardrobeText.string("outfit.unsupported");
+        if (source.state()==ClientOutfitRegistry.State.UNKNOWN) return WardrobeText.string("loading");
+        if (source.state()!=ClientOutfitRegistry.State.KNOWN) return WardrobeText.string("outfit.unavailable");
         var draft=session.fullSnapshot();var baseline=session.fullState();
         if (draft.isPresent() && baseline.isPresent()) {
             for (OutfitPart part:OutfitPart.CANONICAL_ORDER) if (scope.targets.contains(part)) {
@@ -100,44 +100,44 @@ final class OutfitWardrobeContent {
                     if (!status.isEmpty()) return status;
                     if (choice.equals(baseline.orElseThrow().stored().outfit().get(part))
                             && !choice.equals(baseline.orElseThrow().effective().outfit().get(part)))
-                        return "当前不可用，显示原版";
+                        return WardrobeText.string("outfit.dormant");
                 }
             }
         }
-        return entries.isEmpty()?"暂无装束":"";
+        return entries.isEmpty()?WardrobeText.string("outfit.empty"):"";
     }
     private String availabilityText(OutfitId id) {
         return switch(source.availability(id)) {
-            case READY->"";case LOADING->"加载中";case MODEL_MISMATCH->"不支持当前模型";
-            case MODEL_UNKNOWN->"玩家模型尚未就绪";case UNAVAILABLE->"当前定义不可用";
-            case MODEL_INVALID->"当前模型资源不可用";case LOAD_FAILED->"资源加载失败";
+            case READY->"";case LOADING->WardrobeText.string("loading");case MODEL_MISMATCH->WardrobeText.string("outfit.model_mismatch");
+            case MODEL_UNKNOWN->WardrobeText.string("outfit.model_unknown");case UNAVAILABLE->WardrobeText.string("outfit.definition_unavailable");
+            case MODEL_INVALID->WardrobeText.string("outfit.model_invalid");case LOAD_FAILED->WardrobeText.string("outfit.failed");
         };
     }
     List<String> tooltip(OutfitId id) {
         var entry=source.find(id);
-        if (entry.isEmpty()) return List.of(id.value(),"当前不可用");
+        if (entry.isEmpty()) return List.of(id.value(),WardrobeText.string("unavailable"));
         var value=entry.orElseThrow();
-        String parts=String.join("、",OutfitPart.CANONICAL_ORDER.stream().filter(value.parts()::contains).map(OutfitScope::partName).toList());
+        String parts=String.join(WardrobeText.string("list_separator"),OutfitPart.CANONICAL_ORDER.stream().filter(value.parts()::contains).map(OutfitScope::partName).toList());
         String reason=availabilityText(id);
-        if (value.parts().stream().noneMatch(scope.targets::contains)) reason="不提供当前范围";
-        if (reason.isEmpty()) reason="更改当前范围内提供的部位";
+        if (value.parts().stream().noneMatch(scope.targets::contains)) reason=WardrobeText.string("outfit.no_scope");
+        if (reason.isEmpty()) reason=WardrobeText.string("outfit.select_hint");
         var lines=new ArrayList<String>();
-        lines.add(id.value());lines.add("提供："+parts);
-        if(value.parts().size()<6) lines.add("部分装束："+value.parts().size()+"/6；其余保留");
-        lines.add(source.model()==null?"玩家模型尚未就绪":"当前模型："+(source.model()==OutfitModel.WIDE?"宽臂":"纤细"));
-        if (partialUse(id)) lines.add("当前范围部分使用");
+        lines.add(id.value());lines.add(WardrobeText.string("outfit.parts",parts));
+        if(value.parts().size()<6) lines.add(WardrobeText.string("outfit.partial",value.parts().size()));
+        lines.add(source.model()==null?WardrobeText.string("outfit.model_unknown"):WardrobeText.string("outfit.model",source.model()==OutfitModel.WIDE?WardrobeText.string("outfit.wide"):WardrobeText.string("outfit.slim")));
+        if (partialUse(id)) lines.add(WardrobeText.string("outfit.partial_use"));
         lines.add(reason);return List.copyOf(lines);
     }
     List<String> summaryTooltip() {
         return session.fullSnapshot().map(value -> OutfitPart.CANONICAL_ORDER.stream().filter(scope.targets::contains).map(part -> {
-            String text=OutfitScope.partName(part)+"："+label(value.outfit().get(part));
+            String text=WardrobeText.string("field",OutfitScope.partName(part),label(value.outfit().get(part)));
             if (scope.targets.size()==1 && value.outfit().get(part) instanceof OutfitPartSelection.Outfit selected) {
                 var state=session.fullState().orElseThrow();
                 if (value.outfit().get(part).equals(state.stored().outfit().get(part))
-                        && !value.outfit().get(part).equals(state.effective().outfit().get(part))) text+="；当前不可用，显示原版";
-                else { String reason=availabilityText(selected.id());if(!reason.isEmpty()) text+="；"+reason; }
+                        && !value.outfit().get(part).equals(state.effective().outfit().get(part))) text+=WardrobeText.string("separator")+WardrobeText.string("outfit.dormant");
+                else { String reason=availabilityText(selected.id());if(!reason.isEmpty()) text+=WardrobeText.string("separator")+reason; }
             }
-            return text+(session.conflicts(Set.of(part))?"；存在外部修改":"");
+            return text+(session.conflicts(Set.of(part))?WardrobeText.string("separator")+WardrobeText.string("status.conflict"):"");
         }).toList()).orElse(List.of(summary()));
     }
 
@@ -145,22 +145,22 @@ final class OutfitWardrobeContent {
         widgets.clear();original=null;none=null;scopeButton=null;previous=null;next=null;refresh();
         if (!layout.fitsScreen() || !session.v2()) return;
         if (panel==Panel.ROOT) {
-            add.accept(button(layout.scopeButtonBounds(),"返回当前范围",() -> {closePanel();rebuild.run();}));
+            add.accept(button(layout.scopeButtonBounds(),WardrobeText.string("outfit.back_current"),() -> {closePanel();rebuild.run();}));
             var scopes=List.of(OutfitScope.ALL,OutfitScope.HEAD,OutfitScope.UPPER,OutfitScope.LEGS);
             for (int i=0;i<4;i++) {
                 OutfitScope item=scopes.get(i);
-                add.accept(button(layout.scopeOptionBounds(i),item.label,() -> {setScope(item);rebuild.run();}));
+                add.accept(button(layout.scopeOptionBounds(i),item.label(),() -> {setScope(item);rebuild.run();}));
             }
-            add.accept(button(layout.scopeOptionBounds(4),"详细…",() -> {openDetail();rebuild.run();}));
+            add.accept(button(layout.scopeOptionBounds(4),WardrobeText.string("outfit.detail"),() -> {openDetail();rebuild.run();}));
         } else if (panel==Panel.DETAIL) {
-            add.accept(button(layout.scopeButtonBounds(),"返回范围",() -> {openPanel();rebuild.run();}));
+            add.accept(button(layout.scopeButtonBounds(),WardrobeText.string("outfit.back_scope"),() -> {openPanel();rebuild.run();}));
             for (OutfitPart part:OutfitPart.CANONICAL_ORDER) add.accept(button(layout.detailOptionBounds(part.ordinal()),
                     OutfitScope.partName(part)+(session.conflicts(Set.of(part))?" *":""),() -> {setScope(OutfitScope.detail(part));rebuild.run();}));
         } else {
-            scopeButton=button(layout.scopeButtonBounds(),scope.label,() -> {openPanel();rebuild.run();});
+            scopeButton=button(layout.scopeButtonBounds(),scope.label(),() -> {openPanel();rebuild.run();});
             add.accept(scopeButton);
-            original=new WardrobeOutfitActionButton(layout.originalButtonBounds(),"原版",() -> clear(OutfitPartSelection.ORIGINAL));
-            none=new WardrobeOutfitActionButton(layout.noneButtonBounds(),"无外层",() -> clear(OutfitPartSelection.NONE));
+            original=new WardrobeOutfitActionButton(layout.originalButtonBounds(),WardrobeText.string("original"),() -> clear(OutfitPartSelection.ORIGINAL));
+            none=new WardrobeOutfitActionButton(layout.noneButtonBounds(),WardrobeText.string("outfit.none"),() -> clear(OutfitPartSelection.NONE));
             add.accept(original);add.accept(none);
             var current=pageEntries();
             for (int i=0;i<current.size();i++) {
@@ -179,6 +179,6 @@ final class OutfitWardrobeContent {
     private static ImageButton pageButton(WardrobeLayout.Bounds b,boolean forward,Runnable action) {
         String path="recipe_book/page_"+(forward?"forward":"backward");
         return new ImageButton(b.x(),b.y(),b.width(),b.height(),new WidgetSprites(Identifier.withDefaultNamespace(path),
-                Identifier.withDefaultNamespace(path+"_highlighted")),button -> action.run(),Component.literal(forward?"下一页":"上一页"));
+                Identifier.withDefaultNamespace(path+"_highlighted")),button -> action.run(),Component.literal(forward?WardrobeText.string("next"):WardrobeText.string("previous")));
     }
 }

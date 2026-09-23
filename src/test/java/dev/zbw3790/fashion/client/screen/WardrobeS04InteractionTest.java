@@ -12,6 +12,7 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 import dev.zbw3790.fashion.client.outfit.ClientOutfitRegistry;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeS04InteractionTest {
     @ParameterizedTest @ValueSource(booleans={false,true})
     void bothTabEditOrdersSendOneFullPayloadAndSecondApplyStaysSameWindow(boolean capeFirst) {

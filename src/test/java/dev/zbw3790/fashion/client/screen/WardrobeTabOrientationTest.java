@@ -16,6 +16,7 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
 /** 普通 JVM 驱动真实 Screen 事件；不启动或操作 Minecraft 窗口。 */
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeTabOrientationTest {
     @Test
     void newAndReopenedScreensStartWithCapeAndTheAlreadyVerifiedBackYaw() {

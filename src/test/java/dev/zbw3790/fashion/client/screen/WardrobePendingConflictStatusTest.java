@@ -16,6 +16,7 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
 /** 普通 JVM 中复现真实 Screen 的事务提示；不启动或操作 Minecraft 窗口。 */
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobePendingConflictStatusTest {
     enum ChangedField { CAPE, HEAD }
 

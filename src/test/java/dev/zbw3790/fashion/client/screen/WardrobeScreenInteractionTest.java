@@ -38,6 +38,7 @@ import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 import dev.zbw3790.fashion.client.network.ClientFullFashionSelectionResults;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeScreenInteractionTest {
 	private static final UUID SELF = new UUID(0, 1);
 	private static final CapeId FIRST = new CapeId("cape00");

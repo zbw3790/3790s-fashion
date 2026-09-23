@@ -1,11 +1,13 @@
-# 3790's Fashion v0.5.0 安装说明
+# 3790's Fashion v1.0.0 安装说明
 
-本包包含主 Mod JAR、MIT 许可证、两个 Cape 模板与 SHA256SUMS.txt，不包含 Fabric API、Elytra Slot 或开发接口 JAR。
+**未发布的 1.0.0 本地候选。** [中文入门](docs/getting-started-zh_cn.md)／[English](docs/getting-started-en_us.md)。
+
+本包包含主 Mod JAR、MIT 许可证、中英文入门和资源说明、两个 Cape 模板与 SHA256SUMS.txt，不包含 Fabric API、Elytra Slot 或开发接口 JAR。
 
 ## 安装
 
 1. 使用 Minecraft Java Edition 26.2、Java 25、Fabric Loader 0.19.3 或更高兼容版本。
-2. 在客户端与服务器的 mods 目录安装本包的 `3790s-fashion-0.5.0.jar` 以及适用于 26.2 的 Fabric API 0.158.0+26.2 或更高兼容版本。单人只需客户端安装。
+2. 在客户端与服务器的 mods 目录安装本包的 `3790s-fashion-1.0.0.jar` 以及适用于 26.2 的 Fabric API 0.158.0+26.2 或更高兼容版本。单人只需客户端安装。
 3. 升级前正常停服并备份配置和世界；移除 mods 中旧主 Mod JAR，避免新旧两个主 Mod 同时加载，再安装新版。
 4. 原版盔甲架的装备交互优先；没有原版动作时右键打开衣柜，预览 Cape／Outfit／Armor 并统一应用。成功应用后窗口保持打开。
 
@@ -25,7 +27,7 @@ Armor 页先选头盔／胸甲／护腿／靴子，再选原版、隐藏或网�
 
 盔甲架完整原版动作优先；按住次要使用可绕过衣柜。三类草稿统一 Apply，取消或 E／ESC 丢弃未提交选择。主动 ELYTRA 试穿保留胸甲外观，不修改真实装备。
 
-请双端一起升级到 0.5.0 才能使用完整 Cape／Outfit／Armor；旧身份同名频道不冒充新 Full v4。v0.4.0 与本版只按能力协商降级为 Cape，不提供跨版本完整 Outfit／Armor 编辑。已升级的 schema 4 不供旧版读取，降级前恢复升级前备份。
+请双端一起升级到 1.0.0 才能使用完整 Cape／Outfit／Armor；旧身份同名频道不冒充新 Full v4。v0.4.0 与本版只按能力协商降级为 Cape，不提供跨版本完整 Outfit／Armor 编辑。0.5.0 与 1.0.0 均为 schema 4，本次升级不引入新格式。直接降级未作为发行承诺，回退请恢复升级前完整备份。
 
 对于本次固定验证的 Elytra Slot 组合，世界既有支持保持；原版物品栏尚未同步额外 BODY 翼及对应披风遮挡，真实 BODY 驱动的衣柜组合预览未纳入本次发行。主 Mod 单装、真实胸槽 Elytra 及主动 CAPE／ELYTRA 试穿仍可用。
 
@@ -36,3 +38,9 @@ Armor 页先选头盔／胸甲／护腿／靴子，再选原版、隐藏或网�
 代码采用 MIT；Logo 为原创 Outfit 衬衫与 #3790FF 品牌色。盔甲外观只改变绘制，不改变物品与玩法；没有 Visual Contract v2。
 
 完整说明与源码：[3790's Fashion](https://github.com/zbw3790/3790s-fashion)。问题反馈：[Issues](https://github.com/zbw3790/3790s-fashion/issues)。
+
+## 从正式 0.5.0 升级 / Upgrade from 0.5.0
+
+正常关闭游戏和服务器，备份整个世界、config/3790s-fashion 和实例配置。只更换主 JAR，保留配置、资源与玩家缓存；不要同时加载两个版本。首次连接先核对已保存的三域外观，无需 Apply 来恢复。确认后再编辑。
+
+Stop the game and server normally. Back up the complete world, config/3790s-fashion and instance settings. Replace only the main Mod JAR, keeping resources and caches. Both versions use schema 4; this is not a new schema migration. Check saved appearance before editing. To roll back, restore the complete pre-upgrade backup; direct downgrade has not been promised.

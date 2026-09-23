@@ -12,6 +12,7 @@ import dev.zbw3790.fashion.client.network.*;
 import dev.zbw3790.fashion.client.screen.WardrobeSelectionSession;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(dev.zbw3790.fashion.client.screen.WardrobeLanguageTestSupport.class)
 class ClientFullFashionStateTest {
     static final UUID SELF=new UUID(0,1),OTHER=new UUID(0,2);static final CapeId A=new CapeId("a"),B=new CapeId("b"),C=new CapeId("c");
     static FullPlayerFashionState state(long revision,CapeId cape,OutfitSelections outfit){var stored=new PlayerFashionStoredState(Optional.ofNullable(cape),outfit);return new FullPlayerFashionState(stored,new PlayerFashionEffectiveState(stored.cape(),outfit),revision);}

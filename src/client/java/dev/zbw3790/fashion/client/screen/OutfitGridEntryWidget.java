@@ -18,7 +18,7 @@ final class OutfitGridEntryWidget extends AbstractButton {
     }
     OutfitId id() { return id; }
     boolean canActivate() { return visible && content.canActivate(id); }
-    void refresh() { active=true;setMessage(Component.literal(String.join("；",content.tooltip(id)))); }
+    void refresh() { active=true;setMessage(Component.literal(String.join(WardrobeText.string("separator"),content.tooltip(id)))); }
     @Override public void onPress(InputWithModifiers input) { if (canActivate()) content.select(id); }
     @Override protected void extractContents(GuiGraphicsExtractor graphics,int mouseX,int mouseY,float partialTick) {
         var bounds=new WardrobeLayout.Bounds(getX(),getY(),getWidth(),getHeight());

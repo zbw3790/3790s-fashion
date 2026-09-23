@@ -1,6 +1,12 @@
 # 兼容性说明
 
-## 当前 v0.5.0
+## 当前 1.0.0 候选
+
+正式 0.5.0 与 1.0.0 使用相同 Full v4 / schema 4。完整功能建议双端一起升级；本轮有限双向兼容验收不扩展为任意旧版本长期支持。候选尚未发布，最终验收结果由发行审查确认。正常停服备份世界、配置、资源后更换主 JAR；无新 schema 迁移。不承诺直接降级，回退使用升级前完整备份。
+
+固定附属 v1 的世界与主动试穿边界保持；I03_BODY 的物品栏额外翼与 Cape 遮挡仍是已知限制，F04B 真实 BODY 组合尚未实现。不能据此宣称全部 GUI 兼容。
+
+## v0.5.0 历史说明
 
 完整 Cape／Outfit／Armor 需要双端 0.5.0；Full authority 使用 `_v4`，schema 4。相同新 namespace 的 v0.4.0 端按 capability 使用 legacy Cape，不能完整编辑 Outfit／Armor，Cape-only 请求保留服务器其他字段。v0.3.x 旧 namespace 不提供跨版本 Fashion 桥接。True Vanilla 仍按能力防护，不能使用时装功能。
 
@@ -14,7 +20,7 @@
 
 保持原版服务器／客户端的 capability 防护设计；已有 Fresh、真实 v0.3.2 配置／存档迁移和新根优先的人工 Runtime 证据；不把旧 True Vanilla 矩阵冒充本版重新测试。可选 3790's Elytra Slot 0.1.0 已通过 Owner／Observer、装备保存／重连及 Preview 的联合 Runtime，使用冻结 Visual Contract v1，额外 BODY 翼层由附属所有，主 Mod 提供 linked Elytra 外观与 Preview 隔离。没有新增 Armor 时装或槽位功能。
 
-配置、SavedData 和缓存迁移见 [README](../README.md#与原版兼容)。命令为 `/fashion3790 reload`，只重载 Outfit。业务 schema 保持 2，原版／无外层、部分装束和休眠引用语义不变。
+配置、SavedData 和缓存迁移见 [README](../README.md)。命令为 `/fashion3790 reload`，只重载 Outfit。业务 schema 保持 2，原版／无外层、部分装束和休眠引用语义不变。
 
 ## v0.3.x 历史兼容记录
 

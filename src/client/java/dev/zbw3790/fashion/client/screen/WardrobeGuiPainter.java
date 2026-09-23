@@ -78,12 +78,11 @@ final class WardrobeGuiPainter {
         }
         frame(sink, frame, true);
         selectedTab(sink, layout.tabBounds(selected), layout.tabJoinBounds(selected), selected == 0);
-        capeIcon(sink, layout.tabIconBounds(0));
-        outfitIcon(sink, layout.tabIconBounds(1));
-        armorIcon(sink, layout.tabIconBounds(2));
+        // 页签仅绘制底框；手绘图标由 WardrobeGuiIcons 读取正式 PNG，不能叠加旧点阵。
     }
 
-    // 项目衬衫品牌色；只作用于 Outfit 图标，不改变 Cape、原版控件或状态色。
+    // 旧点阵作为已批准主 Logo 的冻结输入和历史校验保留；运行时页签与按钮使用手绘 PNG。
+    // 品牌色也用于资源网格选中线，不随本轮图标接入改变。
     static final int BRAND_BLUE = 0xFF3790FF;
     private static final int OUTFIT_EDGE_COLOR = mixOutfitColor(0, 55);
     private static final int OUTFIT_TOP_COLOR = mixOutfitColor(255, 30);

@@ -250,62 +250,62 @@ public final class WardrobeSelectionSession {
 	}
 
 	public String status(boolean channelSupported, boolean outstanding, Predicate<CapeId> metadataPresent) {
-        if (conflict()) return "存在外部修改";
-        if (persistenceReadOnly) return "服务器时装存档当前只读";
+        if (conflict()) return WardrobeText.string("status.conflict");
+        if (persistenceReadOnly) return WardrobeText.string("status.read_only");
         if (fullError.isPresent()) return switch (fullError.orElseThrow()) {
-            case SUCCESS -> ""; case CONFLICT -> "存在外部修改，请检查";
-            case INVALID_ARMOR_SELECTION -> "盔甲选择已失效，请重新选择";
-            case INVALID_CAPE -> "该披风当前不可用"; case INVALID_OUTFIT_SELECTION -> "装束选择已失效，请重新选择";
-            case SERVICE_UNAVAILABLE -> "时装服务当前不可用"; case READ_ONLY_PERSISTENCE -> "服务器时装存档当前只读";
-            case PROTOCOL_REJECT -> "当前连接不支持完整时装提交"; case STORAGE_LIMIT -> "服务器时装数据已达上限";
-            case NOT_ALLOWED -> "你不能提交该时装选择";
+            case SUCCESS -> ""; case CONFLICT -> WardrobeText.string("status.conflict_review");
+            case INVALID_ARMOR_SELECTION -> WardrobeText.string("status.invalid_armor");
+            case INVALID_CAPE -> WardrobeText.string("status.invalid_cape"); case INVALID_OUTFIT_SELECTION -> WardrobeText.string("status.invalid_outfit");
+            case SERVICE_UNAVAILABLE -> WardrobeText.string("status.service_unavailable"); case READ_ONLY_PERSISTENCE -> WardrobeText.string("status.read_only");
+            case PROTOCOL_REJECT -> WardrobeText.string("status.protocol_reject"); case STORAGE_LIMIT -> WardrobeText.string("status.storage_limit");
+            case NOT_ALLOWED -> WardrobeText.string("status.not_allowed");
         };
         if (lastError.isPresent()) {
 			return switch (lastError.orElseThrow()) {
-				case CAPE_NOT_AVAILABLE -> "该披风当前不可用";
-				case NOT_ALLOWED -> "你不能选择该披风";
-				case SERVICE_UNAVAILABLE -> "时装服务当前不可用";
-				case STORAGE_LIMIT -> "服务器时装数据已达上限";
+				case CAPE_NOT_AVAILABLE -> WardrobeText.string("status.invalid_cape");
+				case NOT_ALLOWED -> WardrobeText.string("status.cape_not_allowed");
+				case SERVICE_UNAVAILABLE -> WardrobeText.string("status.service_unavailable");
+				case STORAGE_LIMIT -> WardrobeText.string("status.storage_limit");
 				case APPLIED, NO_CHANGE -> "";
 			};
 		}
 		if (pendingRequestId != 0) return pendingStatus();
 		if (snapshotState == ClientPlayerFashionRegistry.State.UNAVAILABLE) {
-			return "时装状态当前不可用";
+			return WardrobeText.string("status.authority_unavailable");
 		}
 		if (!authorityKnown) {
-			return "时装状态正在同步";
+			return WardrobeText.string("status.authority_loading");
 		}
 		if (isDormant() && draft().equals(baseline())) {
-			return "该披风当前不可用，暂时使用原版外观";
+			return WardrobeText.string("status.cape_dormant");
 		}
 		if (draft().isPresent() && !metadataPresent.test(draft().orElseThrow())) {
-			return "当前披风正在同步";
+			return WardrobeText.string("status.cape_loading");
 		}
 		if (!channelSupported) {
-			return "服务器不支持保存时装选择";
+			return WardrobeText.string("status.save_unsupported");
 		}
-		return outstanding ? "正在等待之前的选择确认" : "";
+		return outstanding ? WardrobeText.string("status.previous_pending") : "";
 	}
 
     /** 仅投影现有请求状态，不以超时取消、重试或结算事务。 */
     String pendingStatus() {
-        if (pendingRequestId == 0) return "正在等待之前的选择确认";
-        return pendingTicks >= 200 ? "尚未收到服务器确认，状态以服务器为准" : "正在保存…";
+        if (pendingRequestId == 0) return WardrobeText.string("status.previous_pending");
+        return pendingTicks >= 200 ? WardrobeText.string("status.pending_long") : WardrobeText.string("status.pending");
     }
 
     /** 主状态被冲突或拒绝占用时，三个 Tab 共用的补充事实仍保留尚未确认。 */
     List<String> supplementalStatus() {
         if (!hasError() || !waiting()) return List.of();
         return List.of(pendingRequestId != 0 && pendingTicks < 200
-                ? "当前应用仍等待服务器确认" : pendingStatus());
+                ? WardrobeText.string("status.pending_fact") : pendingStatus());
     }
 
 	public String selectionLabel() {
 		if (isDormant() && draft().equals(baseline())) {
-			return "已保存选择：" + baseline().orElseThrow().value();
+			return WardrobeText.string("status.saved", baseline().orElseThrow().value());
 		}
-		return "当前选择：" + draft().map(CapeId::value).orElse("原版");
+		return WardrobeText.string("status.current", draft().map(CapeId::value).orElse(WardrobeText.string("original")));
 	}
 
 	private boolean isDormant() {

@@ -17,6 +17,7 @@ import dev.zbw3790.fashion.fashion.PlayerFashionAuthoritativeState;
 import dev.zbw3790.fashion.fashion.PlayerFashionSnapshot;
 import dev.zbw3790.fashion.network.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeSelectionSessionTest {
 	private static final UUID SELF = new UUID(0, 1);
 	private static final Optional<CapeId> FIRST = Optional.of(new CapeId("first"));

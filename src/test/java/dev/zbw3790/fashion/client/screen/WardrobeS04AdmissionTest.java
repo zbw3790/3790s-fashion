@@ -12,6 +12,7 @@ import dev.zbw3790.fashion.cape.CapeRegistrySnapshot;
 import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeS04AdmissionTest {
     record Gate(String name,State registry,boolean capeKnown,String edit,boolean allowed) { }
     static Stream<Gate> gates() {

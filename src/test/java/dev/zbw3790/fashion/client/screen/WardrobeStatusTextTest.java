@@ -13,6 +13,7 @@ import dev.zbw3790.fashion.fashion.PlayerFashionAuthoritativeState;
 import dev.zbw3790.fashion.network.CapeSelectionReason;
 import dev.zbw3790.fashion.network.CapeSelectionResultPayload;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeStatusTextTest {
 	private static final CapeId FIRST = new CapeId("first");
 	private static final CapeId SECOND = new CapeId("second");

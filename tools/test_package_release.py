@@ -122,6 +122,11 @@ class ReleaseToolingTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     release.audit_runtime_jar(jar_bytes(extra=(name,)))
 
+    def test_runtime_jar_allows_exact_hand_drawn_icons(self) -> None:
+        release.audit_runtime_jar(jar_bytes(extra=tuple(release.RUNTIME_PNG_NAMES - {"assets/fashion_3790/icon.png"})))
+        with self.assertRaises(ValueError):
+            release.audit_runtime_jar(jar_bytes(extra=("assets/fashion_3790/textures/gui/icons/unapproved.png",)))
+
     def test_runtime_jar_rejects_duplicate_entries(self) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -145,6 +150,10 @@ class ReleaseToolingTest(unittest.TestCase):
             for file_name in files:
                 (directory / file_name).write_bytes(f"{name}/{file_name}".encode())
             (directory / "内部说明.txt").write_text("不应进入发布包\n", encoding="utf-8")
+        document_root = self.root / "docs"
+        document_root.mkdir()
+        for name in release.USER_DOCUMENT_NAMES:
+            (document_root / name).write_text("安装说明自测\n", encoding="utf-8")
         release_root = self.root / "release"
         return patch.multiple(
             release,
@@ -152,6 +161,7 @@ class ReleaseToolingTest(unittest.TestCase):
             README_PATH=readme,
             LICENSE_PATH=license_path,
             TEMPLATE_ROOT=templates,
+            USER_DOCUMENT_ROOT=document_root,
             RELEASE_ROOT=release_root,
             PACKAGE_DIRECTORY=release_root / package_name,
             ZIP_PATH=release_root / f"{package_name}-release.zip",
@@ -174,6 +184,24 @@ class ReleaseToolingTest(unittest.TestCase):
                 for line in checksum_text.splitlines():
                     digest, name = line.split("  ", 1)
                     self.assertEqual(hashlib.sha256(archive.read(f"{release.PACKAGE_NAME}/{name}")).hexdigest(), digest)
+
+    def test_release_zip_rejects_broken_document_link(self) -> None:
+        with self.prepare_fixture():
+            release.prepare_package_directory()
+            (release.PACKAGE_DIRECTORY / "README.md").write_text("[失效链接](missing.md)", encoding="utf-8")
+            release.write_checksums()
+            release.write_release_zip(release.ZIP_PATH)
+            with self.assertRaisesRegex(ValueError, "安装包文档链接不存在"):
+                release.audit_release_zip(release.ZIP_PATH)
+
+    def test_release_zip_rejects_missing_anchor(self) -> None:
+        with self.prepare_fixture():
+            release.prepare_package_directory()
+            (release.PACKAGE_DIRECTORY / "README.md").write_text("[失效锚点](docs/compatibility.md#不存在)", encoding="utf-8")
+            release.write_checksums()
+            release.write_release_zip(release.ZIP_PATH)
+            with self.assertRaisesRegex(ValueError, "安装包文档锚点不存在"):
+                release.audit_release_zip(release.ZIP_PATH)
 
     def test_release_zip_rejects_unexpected_file_even_if_directory_matches(self) -> None:
         with self.prepare_fixture():

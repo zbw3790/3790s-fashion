@@ -28,6 +28,7 @@ import dev.zbw3790.fashion.fashion.PlayerFashionSnapshot;
 import dev.zbw3790.fashion.network.CapeSelectionReason;
 import dev.zbw3790.fashion.network.CapeSelectionResultPayload;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class CapeWardrobeContentTest {
 	private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("fashion3790", "test_cape");
 	private static final Function<CapeCosmeticMetadata, Optional<Identifier>> READY = ignored -> Optional.of(TEXTURE);

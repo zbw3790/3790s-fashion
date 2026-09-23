@@ -32,9 +32,9 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 		String sessionStatus = selection.status(channelSupported, outstanding, metadataPresent);
 		String contentText = switch (contentState) {
 			case READY -> "";
-			case EMPTY -> "服务器暂无可用披风";
-			case LOADING -> contentStatus.isEmpty() ? "披风列表正在同步" : contentStatus;
-			case ERROR -> contentStatus.isEmpty() ? "披风列表当前不可用" : contentStatus;
+			case EMPTY -> WardrobeText.string("cape.empty");
+			case LOADING -> contentStatus.isEmpty() ? WardrobeText.string("cape.registry_loading") : contentStatus;
+			case ERROR -> contentStatus.isEmpty() ? WardrobeText.string("cape.registry_unavailable") : contentStatus;
 		};
 		Priority priority;
 		String status;
@@ -49,22 +49,22 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 			status = contentText;
 		} else if (snapshotState == ClientPlayerFashionRegistry.State.UNAVAILABLE) {
 			priority = Priority.ERROR;
-			status = "时装状态当前不可用";
+			status = WardrobeText.string("status.authority_unavailable");
 		} else if (!channelSupported) {
 			priority = Priority.ERROR;
-			status = "服务器不支持保存时装选择";
+			status = WardrobeText.string("status.save_unsupported");
 		} else if (selection.pendingRequestId() != 0) {
 			priority = Priority.PENDING;
 			status = sessionStatus;
 		} else if (outstanding) {
 			priority = Priority.PENDING;
-			status = "正在等待之前的选择确认";
+			status = WardrobeText.string("status.previous_pending");
 		} else if (selection.dormant() && selection.draft().equals(selection.baseline())) {
 			priority = Priority.DORMANT;
 			status = sessionStatus;
 		} else if (!selection.authorityKnown() || snapshotState != ClientPlayerFashionRegistry.State.AVAILABLE) {
 			priority = Priority.LOADING;
-			status = "时装状态正在同步";
+			status = WardrobeText.string("status.authority_loading");
 		} else if (selection.draft().filter(metadataPresent.negate()).isPresent()) {
 			priority = Priority.LOADING;
 			status = sessionStatus;
@@ -97,7 +97,7 @@ record WardrobeStatusText(Priority priority, String firstLine, String secondLine
 	}
 
 	String narration() {
-		return String.join("；", fullText());
+		return String.join(WardrobeText.string("separator"), fullText());
 	}
 
 	Display clip(int maxWidth, ToIntFunction<String> width) {

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import dev.zbw3790.fashion.cape.CapeCosmeticMetadata;
 import dev.zbw3790.fashion.cape.CapeId;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeCapeCatalogTest {
 	private static final String CAPE_HASH = "a".repeat(64);
 	private static final String SECOND_CAPE_HASH = "b".repeat(64);

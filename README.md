@@ -1,5 +1,7 @@
 # 3790's Fashion
 
+**1.0.0 版本入口：** [中文入门](docs/getting-started-zh_cn.md)／[English](docs/getting-started-en_us.md)。 Minecraft 26.2 / Fabric / Java 25；下载以 [GitHub Release](https://github.com/zbw3790/3790s-fashion/releases/tag/v1.0.0) 的实际公开状态为准。
+
 为 Minecraft Java Edition 26.2 提供服务器本地披风、Outfit 外层装束与 Creative Inventory 风格衣柜：服主准备外观资源，玩家在游戏内预览和选择，保留原版基础皮肤、模型与动作。
 
 ![原创 Outfit 衬衫 Logo](branding/logo-128.png)
@@ -8,21 +10,21 @@
 
 ## 安装需求
 
-- 版本：`0.5.0`
+- 版本：`1.0.0`
 - Mod ID：`fashion_3790`
 - Minecraft：`26.2`
 - Fabric Loader：`0.19.3` 或更高兼容版本
 - Fabric API：`0.158.0+26.2` 或更高兼容版本
 - Java：`25`；从源码构建需要 JDK 25
 
-客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `3790s-fashion-0.5.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
+客户端与服务器都需安装 Fabric Loader、Fabric API 和本 Mod，才能使用完整功能。将 `3790s-fashion-1.0.0.jar` 与对应 Minecraft 版本的 Fabric API 放入双方的 `mods/` 目录，再启动游戏和服务器。单人游戏只需在客户端安装。
 
 v0.4.0 将技术身份统一为 `fashion_3790`，保留现有披风、装束和衣柜行为，并纳入已联合验证的 Elytra Slot Visual Contract v1。继续使用原创 Outfit 衬衫 Logo、`#3790FF` 主色和 Outfit Tab 配色。当前 Logo 不再嵌入 Minecraft 原版盔甲架 sprite，图像由确定性脚本生成，未使用 AI。
 
 ## 这个 Mod 能做什么
 
 - 把原版盔甲架当作衣柜入口：完整原版交互优先，没有原版动作时才打开衣柜，不要求空手或空架。
-- Outfit 支持 PNG-only 资源；服主可执行 `/fashion3790 reload` 手动热重载装束，新端无需重连或重新应用。
+- Outfit 支持 PNG-only 资源；服主可执行 `/fashion3790 reload` 手动热重载装束与盔甲资源，新端无需重连或重新应用。
 - Creative Inventory 风格衣柜，支持 Standard / Compact 自适应布局、Cape／Outfit／Armor 三页签、4×3 披风列表和 4×2 装束列表。
 - Outfit 可替换头部、身体、左右袖和左右裤腿六个原版外层部位，支持 WIDE／SLIM；可按整套、分组或单部位选择，保留原版、隐藏外层或形成混搭。
 - 在带边框的深灰区域居中预览玩家，切换披风／鞘翅模型无需更换真实装备；支持“原版”选项和分页浏览，垂直跟随更平缓。
@@ -104,7 +106,7 @@ Armor 页采用四部位入口＋4×2 正面样片网格。先选择头盔、胸
 - 未安装本 Mod 的原版客户端可以进入安装了本 Mod 的服务器，但不能使用衣柜或显示自定义披风／装束。
 - 安装了本 Mod 的客户端可以进入原版服务器；此时不提供衣柜和服务器时装功能。
 
-v0.5.0 使用业务 schema 4；读取旧 schema 1/2 时 Armor 默认为 Original，读取 schema 3 时保留 Hidden。仅实际修改后按 schema 4 保存，单纯读取不标脏。停服并备份后升级：新配置根 `config/3790s-fashion/` 不存在时，从 `config/vanilla-fashion/` 完整复制，保留全部旧文件；新目录已存在则只使用新目录，不合并旧资产。迁移时不要并发修改目录；遇到链接、访问失败或不完整复制会停止启动，避免空 Registry 错误清除选择。
+v0.5.0 与 v1.0.0 均使用业务 schema 4；读取旧 schema 1/2 时 Armor 默认为 Original，读取 schema 3 时保留 Hidden。仅实际修改后按 schema 4 保存，单纯读取不标脏。停服并备份后升级：新配置根 `config/3790s-fashion/` 不存在时，从 `config/vanilla-fashion/` 完整复制，保留全部旧文件；新目录已存在则只使用新目录，不合并旧资产。迁移时不要并发修改目录；遇到链接、访问失败或不完整复制会停止启动，避免空 Registry 错误清除选择。
 
 世界保存由 `data/vanilla_fashion/player_fashion.dat` 验证后复制到 `data/fashion_3790/player_fashion.dat`，只注册新位置的一份权威状态，保留旧文件。坏文件不会被默认状态覆盖，新位置优先且不会因坏文件回退旧副本。Cape／Outfit ID、Original、None、dormant 与玩家记录原样保留。旧 schema 1/2/3 在实际修改后写成 schema 4，保留 Cape、Outfit 和旧隐藏值。新路径使用后旧副本不再同步，降级前必须自行恢复正确备份，不能直接把旧副本当成最新存档。
 
@@ -126,7 +128,7 @@ Windows PowerShell：
 .\gradlew.bat -PelytraSlotVisualApiJar=C:/path/3790s-elytra-slot-visual-api-1.jar clean build --console=plain
 ```
 
-正式 Mod JAR 输出到 `build/libs/3790s-fashion-0.5.0.jar`。
+正式 Mod JAR 输出到 `build/libs/3790s-fashion-1.0.0.jar`。
 
 如需重建包含 README、许可证和 Cape 模板的完整发布 ZIP：
 

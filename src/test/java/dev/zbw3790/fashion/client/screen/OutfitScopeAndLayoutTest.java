@@ -11,6 +11,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import dev.zbw3790.fashion.client.fashion.ClientPlayerFashionRegistry;
 import dev.zbw3790.fashion.outfit.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class OutfitScopeAndLayoutTest {
     @ParameterizedTest @EnumSource(OutfitScope.class)
     void everyProvidedSubsetChangesExactlyIntersectionAndBuiltinsChangeWholeTarget(OutfitScope scope) {
@@ -70,7 +71,10 @@ class OutfitScopeAndLayoutTest {
                 for (int j=i+1;j<bounds.size();j++) assertFalse(b.overlaps(bounds.get(j)),controls.get(i).getMessage()+" / "+controls.get(j).getMessage());
             }
             assertFalse(l.previewModeButtonBounds().overlaps(l.previewDragBounds()));
-            assertFalse(l.tooltipBounds().overlaps(l.applyButtonBounds()));assertFalse(l.tooltipBounds().overlaps(l.paginationBounds()));
+            var target=l.previewModeButtonBounds();
+            var tip=WardrobeTooltipLayout.place(width,240,target.centerX(),target.centerY(),120,30,target,
+                    java.util.List.of(l.applyButtonBounds(),l.paginationBounds()));
+            assertFalse(tip.overlaps(l.applyButtonBounds()));assertFalse(tip.overlaps(l.paginationBounds()));
             assertFalse(l.reloadButtonBounds().overlaps(l.paginationBounds()));assertFalse(l.statusBounds().overlaps(l.applyButtonBounds()));
             assertEquals(88,l.outfitGridBounds().width());assertEquals(68,l.outfitGridBounds().height());
             for (int i=0;i<8;i++) { var b=l.outfitEntryBounds(i);assertTrue(b.x()>=l.gridBounds().x() && b.right()<=l.gridBounds().right());assertTrue(b.bottom()<=l.gridBounds().bottom()); }

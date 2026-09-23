@@ -127,7 +127,7 @@ final class CapeWardrobeContent {
 	}
 
 	private ImageButton pageButton(WardrobeLayout.Bounds bounds, boolean next, Runnable rebuild) {
-		var label = Component.literal(next ? "下一页" : "上一页");
+		var label = Component.literal(next ? WardrobeText.string("next") : WardrobeText.string("previous"));
 		var button = new ImageButton(bounds.x(), bounds.y(), bounds.width(), bounds.height(),
 				next ? NEXT_SPRITES : PREVIOUS_SPRITES, pressed -> {
 					if (pressed.active && pressed.visible && changePage(next)) {
@@ -197,9 +197,9 @@ final class CapeWardrobeContent {
 	String status() {
 		return switch (state) {
 			case READY -> "";
-			case LOADING -> "披风内容正在加载";
-			case EMPTY -> "服务器暂无可用披风";
-			case ERROR -> "披风内容当前不可用";
+			case LOADING -> WardrobeText.string("cape.loading");
+			case EMPTY -> WardrobeText.string("cape.empty");
+			case ERROR -> WardrobeText.string("cape.unavailable");
 		};
 	}
 
@@ -231,15 +231,15 @@ final class CapeWardrobeContent {
 
 		String tooltipText() {
 			if (entry.isVanilla()) {
-				return "原版";
+				return WardrobeText.string("original");
 			}
-			String elytra = entry.metadata().orElseThrow().hasElytra() ? "有" : "无";
+			String elytra = entry.metadata().orElseThrow().hasElytra() ? WardrobeText.string("yes") : WardrobeText.string("no");
 			String status = switch (availability) {
 				case READY -> "";
-				case LOADING -> "\n纹理正在加载";
-				case UNAVAILABLE -> "\n当前不可用";
+				case LOADING -> "\n"+WardrobeText.string("cape.texture_loading");
+				case UNAVAILABLE -> "\n"+WardrobeText.string("unavailable");
 			};
-			return "披风 ID：" + entry.displayName() + "\n自定义鞘翅：" + elytra + status;
+			return WardrobeText.string("cape.id",entry.displayName()) + "\n" + WardrobeText.string("cape.elytra",elytra) + status;
 		}
 	}
 }

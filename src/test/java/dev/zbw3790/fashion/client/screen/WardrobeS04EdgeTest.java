@@ -15,6 +15,7 @@ import dev.zbw3790.fashion.client.outfit.ClientOutfitTextureResolver.Availabilit
 import dev.zbw3790.fashion.fashion.*;
 import dev.zbw3790.fashion.outfit.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(WardrobeLanguageTestSupport.class)
 class WardrobeS04EdgeTest {
     @Test void ordinaryServiceRejectCanBeManuallyRetriedButReadOnlySurvivesReload() {
         for (var status:List.of(FullFashionSelectionStatus.SERVICE_UNAVAILABLE,FullFashionSelectionStatus.READ_ONLY_PERSISTENCE)) {
@@ -168,13 +169,15 @@ class WardrobeS04EdgeTest {
         assertFalse(tooltip.visible("b",false,600_000_000));
     }
     @ParameterizedTest @ValueSource(ints={200,320})
-    void tooltipRemainsInsideReservedAreaEvenAtExtremeAnchorAndLongestText(int width) {
-        var layout=WardrobeLayout.calculate(width,240,9);var area=layout.tooltipBounds();
+    void tooltipAvoidsTargetAndStaysOnScreenAtExtremeAnchor(int width) {
+        var layout=WardrobeLayout.calculate(width,240,9);var target=layout.previewModeButtonBounds();
+        int textWidth=WardrobeTooltipLayout.textWidth(width),textHeight=WardrobeTooltipLayout.textHeight(240,target);
         for(int x:List.of(-999,0,width,9999)) for(int y:List.of(-999,0,240,9999)) {
-            var placed=layout.tooltipPlacement(x,y,area.width()-8,92);
-            assertTrue(placed.x()-4>=area.x() && placed.right()+4<=area.right());
-            assertTrue(placed.y()-4>=area.y() && placed.bottom()+4<=area.bottom());
-            assertFalse(placed.overlaps(layout.applyButtonBounds()));assertFalse(placed.overlaps(layout.paginationBounds()));
+            var placed=WardrobeTooltipLayout.place(width,240,x,y,textWidth,textHeight,target,
+                    List.of(layout.applyButtonBounds(),layout.paginationBounds()));
+            assertTrue(placed.x()-4>=0 && placed.right()+4<=width);
+            assertTrue(placed.y()-4>=0 && placed.bottom()+4<=240);
+            assertFalse(placed.overlaps(target));
         }
     }
     @Test void legacyOutfitTabStaysInspectableWithoutFakeFullAuthorityAndCapeStillSendsLegacy() {

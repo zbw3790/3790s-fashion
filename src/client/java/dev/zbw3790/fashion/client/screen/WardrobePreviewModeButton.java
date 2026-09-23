@@ -33,8 +33,7 @@ final class WardrobePreviewModeButton extends AbstractButton {
 	}
 
 	private void refreshDescription() {
-		Component description = Component.literal(mode.get() == WardrobePreviewMode.CAPE
-				? "当前预览：披风；点击查看鞘翅" : "当前预览：鞘翅；点击查看披风");
+		Component description = WardrobeText.text(mode.get() == WardrobePreviewMode.CAPE ? "preview.cape" : "preview.elytra");
 		setMessage(description);
 		if (!screenTooltip) setTooltip(Tooltip.create(description));
 	}
@@ -43,11 +42,7 @@ final class WardrobePreviewModeButton extends AbstractButton {
 	protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		extractDefaultSprite(graphics);
 		var icon = new WardrobeLayout.Bounds(getX() + 1, getY() + 1, 16, 16);
-		if (mode.get() == WardrobePreviewMode.CAPE) {
-			WardrobeGuiPainter.capeIcon(graphics::fill, icon);
-		} else {
-			WardrobeGuiPainter.elytraIcon(graphics::fill, icon);
-		}
+		WardrobeGuiIcons.draw(graphics, WardrobeGuiIcons.previewTexture(mode.get()), icon);
 	}
 
 	@Override

@@ -46,6 +46,12 @@ def installation_readme(project_root: Path) -> Path:
 
 README_PATH = installation_readme(PROJECT_ROOT)
 LICENSE_PATH = PROJECT_ROOT / "LICENSE"
+USER_DOCUMENT_NAMES = ("getting-started-zh_cn.md", "getting-started-en_us.md", "armor-resources.md", "cape-cosmetic-asset-layout.md", "compatibility.md")
+USER_DOCUMENT_ROOT = PROJECT_ROOT / ("public/docs" if (PROJECT_ROOT / "public/docs").is_dir() else "docs")
+RUNTIME_PNG_NAMES = {"assets/fashion_3790/icon.png"} | {
+    "assets/fashion_3790/textures/gui/icons/" + name
+    for name in ("cape-tag-16.png", "outfit-tag-16.png", "armor-tag-16.png", "elytra-switch-button-16.png")
+}
 VALIDATOR_SOURCE = PROJECT_ROOT / "tools/PackageReleaseValidator.java"
 MAIN_CLASSES = PROJECT_ROOT / "build/classes/java/main"
 INTERNAL_TEMPLATE_ROOT = PROJECT_ROOT / "dev-assets/capes"
@@ -185,7 +191,8 @@ def validate_inputs() -> None:
 
 
 def checksum_paths() -> list[Path]:
-    paths = [Path(JAR_NAME)]
+    paths = [Path(JAR_NAME), Path("README.md"), Path("LICENSE")]
+    paths.extend(Path("docs") / name for name in USER_DOCUMENT_NAMES)
     for name, (_, recognized_files) in TEMPLATES.items():
         paths.extend(
             Path("templates/capes") / name / file_name
@@ -226,6 +233,9 @@ def prepare_package_directory() -> None:
         destination.mkdir()
         for file_name in recognized_files:
             shutil.copyfile(TEMPLATE_ROOT / name / file_name, destination / file_name)
+    (PACKAGE_DIRECTORY / "docs").mkdir()
+    for name in USER_DOCUMENT_NAMES:
+        shutil.copyfile(USER_DOCUMENT_ROOT / name, PACKAGE_DIRECTORY / "docs" / name)
     write_checksums()
 
 
@@ -290,7 +300,7 @@ def audit_runtime_jar(jar_bytes: bytes) -> None:
                 forbidden.append(name)
             elif path.name.lower() in {value.lower() for value in FORBIDDEN_NAMES}:
                 forbidden.append(name)
-            elif path.suffix.lower() == ".png" and name != "assets/fashion_3790/icon.png":
+            elif path.suffix.lower() == ".png" and name not in RUNTIME_PNG_NAMES:
                 forbidden.append(name)
         if forbidden:
             raise ValueError(f"Runtime JAR 包含发布禁用内容：{sorted(set(forbidden))}")
@@ -365,7 +375,7 @@ def audit_release_zip(path: Path) -> None:
             if pure.is_absolute() or ".." in pure.parts or not pure.parts:
                 raise ValueError(f"ZIP 包含不安全路径：{name}")
             top_levels.add(pure.parts[0])
-            if any(part in FORBIDDEN_SEGMENTS for part in pure.parts):
+            if any(part in FORBIDDEN_SEGMENTS - {"docs"} for part in pure.parts):
                 raise ValueError(f"ZIP 包含禁止目录：{name}")
             if pure.name in FORBIDDEN_NAMES or pure.name.endswith("Test.class"):
                 raise ValueError(f"ZIP 包含禁止文件：{name}")
@@ -375,6 +385,26 @@ def audit_release_zip(path: Path) -> None:
         for path_on_disk, archive_name, is_directory in release_entries():
             if not is_directory and archive.read(archive_name) != path_on_disk.read_bytes():
                 raise ValueError(f"ZIP 文件字节与发布目录不一致：{archive_name}")
+
+        # ZIP 内文档链接必须在实际包内解析，不依赖内部仓目录。
+        for file_name in expected_files:
+            if not file_name.endswith(".md"):
+                continue
+            text = archive.read(file_name).decode("utf-8")
+            for link in re.findall(r"\[[^\]]*\]\(([^)]+)\)", text):
+                if re.match(r"(?:https?://|mailto:|#)", link):
+                    continue
+                import posixpath
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(file_name), link.split("#")[0]))
+                if target not in expected_files and target.rstrip("/") + "/" not in expected_directories:
+                    raise ValueError(f"安装包文档链接不存在：{file_name} -> {link}")
+                if "#" in link and target in expected_files:
+                    anchor = link.split("#", 1)[1]
+                    destination_text = archive.read(target).decode("utf-8")
+                    headings = re.findall(r"^#+\s+(.*)$", destination_text, re.M)
+                    slugs = {re.sub(r"[^\w\-\s]", "", heading.lower()).strip().replace(" ", "-") for heading in headings}
+                    if anchor and anchor not in slugs:
+                        raise ValueError(f"安装包文档锚点不存在：{file_name} -> {link}")
 
         nested_jar_name = f"{PACKAGE_NAME}/{JAR_NAME}"
         nested_jar = archive.read(nested_jar_name)

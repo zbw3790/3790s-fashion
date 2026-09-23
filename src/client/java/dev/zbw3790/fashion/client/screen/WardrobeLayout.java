@@ -138,15 +138,6 @@ final class WardrobeLayout {
         return relative(frameBounds.width()-96+(index%2)*45,36+(index/2)*28,43,26);
     }
     Bounds reloadButtonBounds() { return relative(8,122,frameBounds.width()-114,17); }
-    Bounds tooltipBounds() { return relative(8,18,frameBounds.width()-16,102); }
-
-    Bounds tooltipPlacement(int anchorX,int anchorY,int textWidth,int textHeight) {
-        Bounds area=tooltipBounds();
-        int w=Math.min(textWidth,area.width()-8),h=Math.min(textHeight,area.height()-8);
-        int x=Math.clamp(anchorX+8,area.x()+4,area.right()-w-4);
-        int y=Math.clamp(anchorY+8,area.y()+4,area.bottom()-h-4);
-        return new Bounds(x,y,Math.max(1,w),Math.max(1,h));
-    }
 
 	private Bounds relative(int x, int y, int width, int height) {
 		return new Bounds(frameBounds.x() + x, frameBounds.y() + y, width, height);
